@@ -1,5 +1,8 @@
+using System.Numerics;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
+using Quaternion = UnityEngine.Quaternion;
+using Vector3 = UnityEngine.Vector3;
 
 public class PlayerScript : MonoBehaviour
 {
@@ -29,6 +32,8 @@ public class PlayerScript : MonoBehaviour
     private bool isDrinking;
     private bool isCasting;
 
+    private bool isGliding;
+
     private bool isBreathing;
     private Vector3 moveDirection;
     private float targetRigWeight;
@@ -39,14 +44,20 @@ public class PlayerScript : MonoBehaviour
     // Animation parameter names
     private const string MOVE_ANIMATION = "Walk";
     private const string IS_MOVING = "IsWalking";
-    private const string BREATH_ANIMATION = "Breath";
-    private const string IS_BREATHING = "IsBreathing";
 
     private const string IS_DRINKING = "IsDrinking";
-    private const string DRINK_ANIMATION = "Drink";
 
-    private const string IS_CASTING = "IsDrinking";
-    private const string CAST_ANIMATION = "Cast";
+    private const string IS_CASTING = "IsCasting";
+
+    private const string IS_GLIDING = "IsGlide";
+
+    [Header("Cross Setup")]
+    public Transform hitAnchor;
+    public Transform handTransform;
+    public Vector3 hitOffset;
+    public Vector3 hitRotationOffset;
+    public Vector3 crossOffset;
+    public Vector3 crossRotationOffset;
 
     void Start()
     {
@@ -92,8 +103,8 @@ public class PlayerScript : MonoBehaviour
         GetInput();
         HandleBreathing();
 
-        // Only allow movement when not breathing or drinking
-        if (!isBreathing && !isDrinking)
+        // Only allow movement when not breathing, drinking, or casting
+        if (!isBreathing && !isDrinking && !isCasting)
         {
             HandleMovement();
             HandleRotation();
@@ -102,6 +113,11 @@ public class PlayerScript : MonoBehaviour
         HandleAnimation();
         HandleRigWeight();
         HandleCastingInput();
+
+        if(isGliding == true)
+        {
+             this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
+        }
     }
 
     void GetInput()
@@ -110,7 +126,7 @@ public class PlayerScript : MonoBehaviour
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
         // Check if player is moving (only when not breathing)
-        isMoving = !isBreathing && Mathf.Abs(horizontalInput) > 0.01f;
+        isMoving = !isBreathing && !isDrinking && !isCasting && Mathf.Abs(horizontalInput) > 0.01f;
     }
 
     void HandleCastingInput()
@@ -170,16 +186,16 @@ public class PlayerScript : MonoBehaviour
             if (horizontalInput < 0)
             {
                 // Moving left - rotate to face left (180 degrees on Y-axis)
-                targetRotation = Quaternion.Euler(0, 180, 0);
+                targetRotation = UnityEngine.Quaternion.Euler(0, 180, 0);
             }
             else
             {
                 // Moving right - rotate to face right (0 degrees on Y-axis)
-                targetRotation = Quaternion.Euler(0, 0, 0);
+                targetRotation = UnityEngine.Quaternion.Euler(0, 0, 0);
             }
 
             // Smoothly rotate towards target rotation
-            transform.rotation = Quaternion.Lerp(
+            transform.rotation = UnityEngine.Quaternion.Lerp(
                 transform.rotation,
                 targetRotation,
                 smoothRotation * Time.deltaTime
@@ -191,9 +207,6 @@ public class PlayerScript : MonoBehaviour
     {
         if (animator != null)
         {
-            // Set breathing state
-            animator.SetBool(IS_BREATHING, isBreathing);
-
             // Set walking state (only when not breathing)
             animator.SetBool(IS_MOVING, isMoving);
 
@@ -204,11 +217,11 @@ public class PlayerScript : MonoBehaviour
 
     void HandleRigWeight()
     {
-        if (walkRig == null)
+        if (walkRig == null || armRig == null)
             return;
 
-        // Disable rig for Breath OR Drink
-        if (isBreathing || isDrinking)
+        // Disable rigs for Breath, Drink, OR Cast
+        if (isBreathing || isDrinking || isCasting || isGliding)
         {
             targetRigWeight = 0f;
         }
@@ -235,10 +248,38 @@ public class PlayerScript : MonoBehaviour
         if (!other.CompareTag("ActionTrigger"))
             return;
 
-        if (other.name == "Water Fountain" && !isDrinking && !isBreathing)
+        if (
+            other.CompareTag("ActionTrigger")
+            && other.name == "Water Fountain"
+            && !isDrinking
+            && !isBreathing
+        )
         {
             StartDrinking();
         }
+
+        if (
+            other.CompareTag("ActionTrigger")
+            && other.name == "Glide Zone"
+            && !isDrinking
+            && !isBreathing
+            && !isCasting
+        )
+        {
+            StartGliding();
+        }
+    }
+
+    void StartGliding()
+    {
+        isGliding = true;
+        animator.SetBool(IS_GLIDING, true);
+
+       
+
+        // Optional: stop movement immediately
+        isMoving = false;
+        crossReferrence.SetActive(false);
     }
 
     void StartDrinking()
@@ -262,5 +303,21 @@ public class PlayerScript : MonoBehaviour
         animator.SetBool(IS_DRINKING, false);
         crossReferrence.SetActive(true);
         cupGO.SetActive(false);
+    }
+
+    // == ANIMATION EVENTS ==
+    public void AnimationEvent_StartCasting()
+    {
+        crossReferrence.transform.SetParent(hitAnchor);
+        crossReferrence.transform.localPosition = hitOffset;
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(hitRotationOffset);
+    }
+
+    public void AnimationEvent_EndCasting()
+    {
+        crossReferrence.transform.SetParent(null);
+        // crossReferrence.transform.SetParent(handTransform);
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(crossRotationOffset);
+        crossReferrence.transform.position = crossOffset;
     }
 }
