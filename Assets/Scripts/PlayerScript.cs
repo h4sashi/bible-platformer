@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Numerics;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
@@ -32,7 +33,7 @@ public class PlayerScript : MonoBehaviour
     private bool isDrinking;
     private bool isCasting;
 
-    private bool isGliding;
+    public bool isGliding;
 
     private bool isBreathing;
     private Vector3 moveDirection;
@@ -58,6 +59,9 @@ public class PlayerScript : MonoBehaviour
     public Vector3 hitRotationOffset;
     public Vector3 crossOffset;
     public Vector3 crossRotationOffset;
+
+    [Header("Glider Seetings")]
+    public GameObject crossGliderGO;
 
     void Start()
     {
@@ -101,10 +105,9 @@ public class PlayerScript : MonoBehaviour
     void Update()
     {
         GetInput();
-        HandleBreathing();
 
         // Only allow movement when not breathing, drinking, or casting
-        if (!isBreathing && !isDrinking && !isCasting)
+        if (!isBreathing && !isDrinking && !isCasting && !isGliding)
         {
             HandleMovement();
             HandleRotation();
@@ -114,10 +117,18 @@ public class PlayerScript : MonoBehaviour
         HandleRigWeight();
         HandleCastingInput();
 
-        if(isGliding == true)
+        if (isGliding == true)
         {
-             this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
+            this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
+            DisableAllMovements();
         }
+    }
+
+    void DisableAllMovements()
+    {
+        isMoving = false;
+        isCasting = false;
+        isDrinking = false;
     }
 
     void GetInput()
@@ -151,20 +162,7 @@ public class PlayerScript : MonoBehaviour
         animator.SetBool(IS_CASTING, false);
     }
 
-    void HandleBreathing()
-    {
-        // Press Space to start breathing
-        if (Input.GetKeyDown(KeyCode.Space) && !isBreathing)
-        {
-            isBreathing = true;
-        }
-
-        // Press M to stop breathing and return to idle
-        if (Input.GetKeyDown(KeyCode.M) && isBreathing)
-        {
-            isBreathing = false;
-        }
-    }
+ 
 
     void HandleMovement()
     {
@@ -211,7 +209,7 @@ public class PlayerScript : MonoBehaviour
             animator.SetBool(IS_MOVING, isMoving);
 
             // Set walk intensity
-            animator.SetFloat(MOVE_ANIMATION, isMoving ? Mathf.Abs(horizontalInput) : 0f);
+            // animator.SetFloat(MOVE_ANIMATION, isMoving ? Mathf.Abs(horizontalInput) : 0f);
         }
     }
 
@@ -268,18 +266,58 @@ public class PlayerScript : MonoBehaviour
         {
             StartGliding();
         }
+
+          if (
+            other.CompareTag("ActionTrigger")
+            && other.name == "Glide Zone Off"
+            && !isDrinking
+            && !isBreathing
+            && !isCasting
+        )
+        {
+          StopGliding();
+        }
+        
     }
 
-    void StartGliding()
+    public void StartGliding()
     {
         isGliding = true;
         animator.SetBool(IS_GLIDING, true);
 
-       
-
         // Optional: stop movement immediately
         isMoving = false;
         crossReferrence.SetActive(false);
+        InitGlider();
+    }
+
+    public void StopGliding()
+    {
+        isGliding = false;
+        this.transform.parent = null;
+
+        animator.SetBool(IS_GLIDING, false);
+        crossReferrence.SetActive(true);
+        crossGliderGO.SetActive(false);
+    }
+
+    void InitGlider()
+    {
+        crossGliderGO.SetActive(true);
+
+        this.transform.SetParent(crossGliderGO.transform);
+        // this.transform.localPosition = Vector3.zero;
+
+        // Rigidbody crossRB = crossGliderGO.GetComponent<Rigidbody>();
+        // if (crossRB == null)
+        // {
+        //     crossRB = crossGliderGO.AddComponent<Rigidbody>();
+        // }
+
+        // crossRB.useGravity = false;
+
+        // Set to a layer that doesn't collide with player
+        // crossGliderGO.layer = LayerMask.NameToLayer("Glider"); // Create this layer in Unity
     }
 
     void StartDrinking()
