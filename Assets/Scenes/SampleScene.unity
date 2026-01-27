@@ -4875,6 +4875,7 @@ GameObject:
   - component: {fileID: 1273153355}
   - component: {fileID: 1273153356}
   - component: {fileID: 1273153357}
+  - component: {fileID: 1273153358}
   m_Layer: 0
   m_Name: cm
   m_TagString: Untagged
@@ -4958,6 +4959,23 @@ MonoBehaviour:
   m_BiasX: 0
   m_BiasY: 0
   m_CenterOnActivate: 1
+--- !u!114 &1273153358
+MonoBehaviour:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1273153351}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_NoiseProfile: {fileID: 11400000, guid: 69ce8388f6785dd4c8c39915efece2f4, type: 2}
+  m_PivotOffset: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 1
+  m_FrequencyGain: 1
+  mNoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &1274584492
 GameObject:
   m_ObjectHideFlags: 0
@@ -5466,6 +5484,7 @@ GameObject:
   - component: {fileID: 1450901212}
   - component: {fileID: 1450901211}
   - component: {fileID: 1450901213}
+  - component: {fileID: 1450901214}
   m_Layer: 0
   m_Name: Virtual Camera
   m_TagString: Untagged
@@ -5558,6 +5577,25 @@ MonoBehaviour:
   m_Damping: 0
   m_DampingWhenOccluded: 0
   m_OptimalTargetDistance: 0
+--- !u!114 &1450901214
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1450901210}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b8eb50c23cc94c34a3e968b97de3e81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  virtualCamera: {fileID: 0}
+  lightShakeIntensity: 1
+  lightShakeDuration: 0.2
+  mediumShakeIntensity: 2.5
+  mediumShakeDuration: 0.4
+  heavyShakeIntensity: 4
+  heavyShakeDuration: 0.6
 --- !u!1001 &1452415721
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5857,7 +5895,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   numberOfHits: 0
-  maxHits: 3
+  maxHits: 6
+  targetObjects:
+  - {fileID: 586181905}
+  - {fileID: 1157888889}
+  - {fileID: 1274584492}
+  - {fileID: 442191322}
+  minUpwardForce: 70
+  maxUpwardForce: 140
+  minSideForce: 30
+  maxSideForce: 50
+  minTorque: 55
+  maxTorque: 200
+  hitCooldown: 4
+  destroyAfterDelay: 1
+  destroyDelay: 3
 --- !u!1 &1550047199
 GameObject:
   m_ObjectHideFlags: 0
@@ -6266,7 +6318,6 @@ GameObject:
   - component: {fileID: 1618598972}
   - component: {fileID: 1618598971}
   - component: {fileID: 1618598974}
-  - component: {fileID: 1618598973}
   m_Layer: 7
   m_Name: cross
   m_TagString: Cross
@@ -6341,27 +6392,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1618598969}
   m_Mesh: {fileID: -5495902117074765545, guid: f13ea100ab70e42d59e78ea9f61f81a9, type: 3}
---- !u!65 &1618598973
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1618598969}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 0
-  serializedVersion: 3
-  m_Size: {x: 0.06001044, y: 0.01165739, z: 0.012782411}
-  m_Center: {x: 0.00006504001, y: 0.00000018446873, z: -0.00012546925}
 --- !u!65 &1618598974
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -6381,8 +6411,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.012442348, y: 0.01165739, z: 0.079416335}
-  m_Center: {x: 0.000065032815, y: 0.00000017912848, z: -0.018516824}
+  m_Size: {x: 0.012442348, y: 0.01165739, z: 0.027844498}
+  m_Center: {x: 0.0000650262, y: 0.0000001865925, z: 0.0072691212}
 --- !u!4 &1741068841 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4811870578866944, guid: ab5c0039ed2261b43b0194a5f460d434, type: 3}
@@ -17796,6 +17826,8 @@ MonoBehaviour:
   isGliding: 0
   crossReferrence: {fileID: 1618598969}
   cupGO: {fileID: 834634844}
+  initialTransformCrossOffset: {x: 0.163, y: -0.071, z: 0.113}
+  initialRotationCrossOffset: {x: -64.967, y: 460.277, z: -88.039}
   hitAnchor: {fileID: 916172479}
   handTransform: {fileID: 9175382507319755798}
   hitOffset: {x: 0.505, y: 0.758, z: -0.393}

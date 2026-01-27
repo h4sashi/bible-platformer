@@ -382,10 +382,16 @@ public class PlayerScript : MonoBehaviour
     public void AnimationEvent_StartCasting()
     {
         crossReferrence.transform.SetParent(hitAnchor);
-        crossCol.enabled = true;
+        
 
         crossReferrence.transform.localPosition = hitOffset;
         crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(hitRotationOffset);
+    }
+
+    public void AnimationEvent_CastFX()
+    {
+        crossCol.enabled = true;
+        CameraShake.Instance.ShakeHeavy();
     }
 
     public void AnimationEvent_EndCasting()
@@ -395,8 +401,10 @@ public class PlayerScript : MonoBehaviour
         animator.SetBool(IS_CASTING, false);
         crossReferrence.transform.SetParent(handTransform);
         crossReferrence.transform.localPosition = initialTransformCrossOffset;
-        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
-      
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+            initialRotationCrossOffset
+        );
+
         // crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(crossRotationOffset);
         // crossReferrence.transform.position = crossOffset;
     }
