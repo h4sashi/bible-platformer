@@ -25,21 +25,28 @@ public class PlayerScript : MonoBehaviour
     [SerializeField]
     private Rig armRig;
 
+    public Rig glideRig;
+
     [SerializeField]
     private float rigTransitionSpeed = 5f;
 
     private float horizontalInput;
     private bool isMoving;
     private bool isDrinking;
-    private bool isCasting;
+
+    public bool isCasting;
 
     public bool isGliding;
 
     private bool isBreathing;
     private Vector3 moveDirection;
+    private bool isBlockedForward = false;
+    private float blockDirection = 0f; // The direction that's blocked (left or right)
+
     private float targetRigWeight;
 
     public GameObject crossReferrence;
+    private BoxCollider crossCol;
     public GameObject cupGO;
 
     // Animation parameter names
@@ -52,7 +59,11 @@ public class PlayerScript : MonoBehaviour
 
     private const string IS_GLIDING = "IsGlide";
 
-    [Header("Cross Setup")]
+    [Header("Initial Cross Setup")]
+    public Vector3 initialTransformCrossOffset;
+    public Vector3 initialRotationCrossOffset;
+
+    [Header("Final Cross Setup")]
     public Transform hitAnchor;
     public Transform handTransform;
     public Vector3 hitOffset;
@@ -60,8 +71,13 @@ public class PlayerScript : MonoBehaviour
     public Vector3 crossOffset;
     public Vector3 crossRotationOffset;
 
-    [Header("Glider Seetings")]
+    [Header("Glider Settings")]
     public GameObject crossGliderGO;
+
+    private void Awake()
+    {
+        glideRig.weight = 0;
+    }
 
     void Start()
     {
@@ -100,6 +116,10 @@ public class PlayerScript : MonoBehaviour
                 Debug.LogWarning("No Rig component assigned or found!");
             }
         }
+
+        // Player's Cross Collider
+        crossCol = crossReferrence.GetComponent<BoxCollider>();
+        crossCol.enabled = false;
     }
 
     void Update()
@@ -162,12 +182,17 @@ public class PlayerScript : MonoBehaviour
         animator.SetBool(IS_CASTING, false);
     }
 
- 
-
     void HandleMovement()
     {
         if (isMoving)
         {
+            // Check if movement is blocked
+            if (isBlockedForward && Mathf.Sign(horizontalInput) == Mathf.Sign(blockDirection))
+            {
+                // Don't allow movement in the blocked direction
+                return;
+            }
+
             // Move along the Z-axis (left/right in 2.5D perspective)
             moveDirection = new Vector3(0, 0, horizontalInput);
             transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
@@ -215,7 +240,7 @@ public class PlayerScript : MonoBehaviour
 
     void HandleRigWeight()
     {
-        if (walkRig == null || armRig == null)
+        if (walkRig == null || armRig == null || glideRig == null)
             return;
 
         // Disable rigs for Breath, Drink, OR Cast
@@ -267,7 +292,7 @@ public class PlayerScript : MonoBehaviour
             StartGliding();
         }
 
-          if (
+        if (
             other.CompareTag("ActionTrigger")
             && other.name == "Glide Zone Off"
             && !isDrinking
@@ -275,9 +300,30 @@ public class PlayerScript : MonoBehaviour
             && !isCasting
         )
         {
-          StopGliding();
+            StopGliding();
         }
-        
+
+        if (
+            other.CompareTag("ActionTrigger")
+            && other.name == "RockObstacle"
+            && !isDrinking
+            && !isBreathing
+            && !isCasting
+        )
+        {
+            isBlockedForward = true;
+            // Store which direction is blocked based on current movement
+            blockDirection = horizontalInput;
+        }
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("ActionTrigger") && other.name == "RockObstacle")
+        {
+            isBlockedForward = false;
+            blockDirection = 0f;
+        }
     }
 
     public void StartGliding()
@@ -306,18 +352,7 @@ public class PlayerScript : MonoBehaviour
         crossGliderGO.SetActive(true);
 
         this.transform.SetParent(crossGliderGO.transform);
-        // this.transform.localPosition = Vector3.zero;
-
-        // Rigidbody crossRB = crossGliderGO.GetComponent<Rigidbody>();
-        // if (crossRB == null)
-        // {
-        //     crossRB = crossGliderGO.AddComponent<Rigidbody>();
-        // }
-
-        // crossRB.useGravity = false;
-
-        // Set to a layer that doesn't collide with player
-        // crossGliderGO.layer = LayerMask.NameToLayer("Glider"); // Create this layer in Unity
+        glideRig.weight = 1;
     }
 
     void StartDrinking()
@@ -347,15 +382,22 @@ public class PlayerScript : MonoBehaviour
     public void AnimationEvent_StartCasting()
     {
         crossReferrence.transform.SetParent(hitAnchor);
+        crossCol.enabled = true;
+
         crossReferrence.transform.localPosition = hitOffset;
         crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(hitRotationOffset);
     }
 
     public void AnimationEvent_EndCasting()
     {
-        crossReferrence.transform.SetParent(null);
-        // crossReferrence.transform.SetParent(handTransform);
-        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(crossRotationOffset);
-        crossReferrence.transform.position = crossOffset;
+        crossCol.enabled = false;
+        isCasting = false;
+        animator.SetBool(IS_CASTING, false);
+        crossReferrence.transform.SetParent(handTransform);
+        crossReferrence.transform.localPosition = initialTransformCrossOffset;
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
+      
+        // crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(crossRotationOffset);
+        // crossReferrence.transform.position = crossOffset;
     }
 }

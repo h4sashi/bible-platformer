@@ -744,6 +744,7 @@ PlayerSettings:
   webGLWebAssemblyBigInt: 0
   webGLCloseOnQuit: 0
   scriptingDefineSymbols:
+    Android: MODULAR_3D_TEXT
     Standalone: MODULAR_3D_TEXT
   additionalCompilerArguments: {}
   platformArchitecture: {}
