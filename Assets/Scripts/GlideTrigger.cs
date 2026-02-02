@@ -18,6 +18,10 @@ public class GlideTrigger : MonoBehaviour
     private float horizontalInput;
     private Vector3 moveDirection;
 
+    private void Start() {
+        player = GameObject.FindGameObjectWithTag("Player").transform;
+    }
+
     void Update()
     {
         if (IsPlayerGliding == true && player != null)

@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -26,6 +27,8 @@ public abstract class AnimalFSM : MonoBehaviour
     protected Animator animator;
 
     protected AnimalState currentState;
+
+   
 
     protected virtual void Awake()
     {

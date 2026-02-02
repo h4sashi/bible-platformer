@@ -2,6 +2,7 @@ using System.Collections;
 using System.Numerics;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
+using UnityEngine.UI;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
 
@@ -20,7 +21,7 @@ public class PlayerScript : MonoBehaviour
 
     [Header("Animation Rigging")]
     [SerializeField]
-    private Rig walkRig; // Assign your rig component here
+    private Rig walkRig;
 
     [SerializeField]
     private Rig armRig;
@@ -29,6 +30,10 @@ public class PlayerScript : MonoBehaviour
 
     [SerializeField]
     private float rigTransitionSpeed = 5f;
+
+    [Header("Drinking Settings")]
+    private CanvasTrigger canvasTrigger;
+    private int currentWaterAmount = 0;
 
     private float horizontalInput;
     private bool isMoving;
@@ -41,7 +46,7 @@ public class PlayerScript : MonoBehaviour
     private bool isBreathing;
     private Vector3 moveDirection;
     private bool isBlockedForward = false;
-    private float blockDirection = 0f; // The direction that's blocked (left or right)
+    private float blockDirection = 0f;
 
     private float targetRigWeight;
 
@@ -49,14 +54,15 @@ public class PlayerScript : MonoBehaviour
     private BoxCollider crossCol;
     public GameObject cupGO;
 
+    // Water Fountain interaction
+    private bool isNearWaterFountain = false;
+    private GameObject currentWaterFountain;
+
     // Animation parameter names
     private const string MOVE_ANIMATION = "Walk";
     private const string IS_MOVING = "IsWalking";
-
     private const string IS_DRINKING = "IsDrinking";
-
     private const string IS_CASTING = "IsCasting";
-
     private const string IS_GLIDING = "IsGlide";
 
     [Header("Initial Cross Setup")]
@@ -74,14 +80,34 @@ public class PlayerScript : MonoBehaviour
     [Header("Glider Settings")]
     public GameObject crossGliderGO;
 
+    [Header("Player Health Settings")]
+    [HideInInspector]
+    public int maxHealth = 100;
+
+    public int currentHealth;
+    public Image splashDamageImage;
+    public float flashDuration = 0.5f;
+    public Color flashColor = new Color(1f, 0f, 0f, 0.5f);
+
+    [Header("Player Attack Settings")]
+    public SphereCollider crossHitCol;
+   
+    public LayerMask enemyLayer; // Layer mask to identify enemies
+    public float damageAmount = 25f; // Damage to apply to enemies
+
     private void Awake()
     {
         glideRig.weight = 0;
+        currentHealth = maxHealth;
+        
+        if (splashDamageImage != null)
+        {
+            splashDamageImage.color = Color.clear;
+        }
     }
 
     void Start()
     {
-        // Get the Animator component if not assigned
         if (animator == null)
         {
             animator = GetComponent<Animator>();
@@ -91,7 +117,6 @@ public class PlayerScript : MonoBehaviour
             }
         }
 
-        // Get the Rig component if not assigned
         if (walkRig == null)
         {
             RigBuilder rigBuilder = GetComponent<RigBuilder>();
@@ -117,7 +142,6 @@ public class PlayerScript : MonoBehaviour
             }
         }
 
-        // Player's Cross Collider
         crossCol = crossReferrence.GetComponent<BoxCollider>();
         crossCol.enabled = false;
     }
@@ -126,7 +150,12 @@ public class PlayerScript : MonoBehaviour
     {
         GetInput();
 
-        // Only allow movement when not breathing, drinking, or casting
+        if (isNearWaterFountain)
+        {
+            isMoving = false;
+            horizontalInput = 0f;
+        }
+
         if (!isBreathing && !isDrinking && !isCasting && !isGliding)
         {
             HandleMovement();
@@ -136,6 +165,7 @@ public class PlayerScript : MonoBehaviour
         HandleAnimation();
         HandleRigWeight();
         HandleCastingInput();
+        HandleDrinkingInput();
 
         if (isGliding == true)
         {
@@ -153,11 +183,13 @@ public class PlayerScript : MonoBehaviour
 
     void GetInput()
     {
-        // Get horizontal input (A/D or Left/Right arrow keys)
         horizontalInput = Input.GetAxisRaw("Horizontal");
-
-        // Check if player is moving (only when not breathing)
-        isMoving = !isBreathing && !isDrinking && !isCasting && Mathf.Abs(horizontalInput) > 0.01f;
+        isMoving =
+            !isBreathing
+            && !isDrinking
+            && !isCasting
+            && !isGliding
+            && Mathf.Abs(horizontalInput) > 0.01f;
     }
 
     void HandleCastingInput()
@@ -168,11 +200,25 @@ public class PlayerScript : MonoBehaviour
         }
     }
 
+    void HandleDrinkingInput()
+    {
+        if (
+            Input.GetKeyDown(KeyCode.K)
+            && isNearWaterFountain
+            && !isDrinking
+            && !isCasting
+            && !isBreathing
+            && !isGliding
+        )
+        {
+            StartDrinking();
+        }
+    }
+
     void StartCasting()
     {
         isCasting = true;
         animator.SetBool(IS_CASTING, true);
-
         isMoving = false;
     }
 
@@ -186,14 +232,11 @@ public class PlayerScript : MonoBehaviour
     {
         if (isMoving)
         {
-            // Check if movement is blocked
             if (isBlockedForward && Mathf.Sign(horizontalInput) == Mathf.Sign(blockDirection))
             {
-                // Don't allow movement in the blocked direction
                 return;
             }
 
-            // Move along the Z-axis (left/right in 2.5D perspective)
             moveDirection = new Vector3(0, 0, horizontalInput);
             transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
         }
@@ -203,21 +246,17 @@ public class PlayerScript : MonoBehaviour
     {
         if (isMoving)
         {
-            // Determine target rotation based on movement direction
             Quaternion targetRotation;
 
             if (horizontalInput < 0)
             {
-                // Moving left - rotate to face left (180 degrees on Y-axis)
                 targetRotation = UnityEngine.Quaternion.Euler(0, 180, 0);
             }
             else
             {
-                // Moving right - rotate to face right (0 degrees on Y-axis)
                 targetRotation = UnityEngine.Quaternion.Euler(0, 0, 0);
             }
 
-            // Smoothly rotate towards target rotation
             transform.rotation = UnityEngine.Quaternion.Lerp(
                 transform.rotation,
                 targetRotation,
@@ -230,11 +269,7 @@ public class PlayerScript : MonoBehaviour
     {
         if (animator != null)
         {
-            // Set walking state (only when not breathing)
             animator.SetBool(IS_MOVING, isMoving);
-
-            // Set walk intensity
-            // animator.SetFloat(MOVE_ANIMATION, isMoving ? Mathf.Abs(horizontalInput) : 0f);
         }
     }
 
@@ -243,7 +278,6 @@ public class PlayerScript : MonoBehaviour
         if (walkRig == null || armRig == null || glideRig == null)
             return;
 
-        // Disable rigs for Breath, Drink, OR Cast
         if (isBreathing || isDrinking || isCasting || isGliding)
         {
             targetRigWeight = 0f;
@@ -271,14 +305,13 @@ public class PlayerScript : MonoBehaviour
         if (!other.CompareTag("ActionTrigger"))
             return;
 
-        if (
-            other.CompareTag("ActionTrigger")
-            && other.name == "Water Fountain"
-            && !isDrinking
-            && !isBreathing
-        )
+        if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
         {
-            StartDrinking();
+            isNearWaterFountain = true;
+            currentWaterFountain = other.gameObject;
+            Debug.Log("Near water fountain - Press K to drink");
+            canvasTrigger = other.GetComponent<CanvasTrigger>();
+            canvasTrigger?.ActivateCanvas();
         }
 
         if (
@@ -290,6 +323,7 @@ public class PlayerScript : MonoBehaviour
         )
         {
             StartGliding();
+            crossGliderGO.GetComponent<GlideTrigger>().IsPlayerGliding = true;
         }
 
         if (
@@ -312,7 +346,6 @@ public class PlayerScript : MonoBehaviour
         )
         {
             isBlockedForward = true;
-            // Store which direction is blocked based on current movement
             blockDirection = horizontalInput;
         }
     }
@@ -324,14 +357,19 @@ public class PlayerScript : MonoBehaviour
             isBlockedForward = false;
             blockDirection = 0f;
         }
+
+        if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
+        {
+            isNearWaterFountain = false;
+            currentWaterFountain = null;
+            Debug.Log("Left water fountain area");
+        }
     }
 
     public void StartGliding()
     {
         isGliding = true;
         animator.SetBool(IS_GLIDING, true);
-
-        // Optional: stop movement immediately
         isMoving = false;
         crossReferrence.SetActive(false);
         InitGlider();
@@ -341,7 +379,6 @@ public class PlayerScript : MonoBehaviour
     {
         isGliding = false;
         this.transform.parent = null;
-
         animator.SetBool(IS_GLIDING, false);
         crossReferrence.SetActive(true);
         crossGliderGO.SetActive(false);
@@ -350,7 +387,6 @@ public class PlayerScript : MonoBehaviour
     void InitGlider()
     {
         crossGliderGO.SetActive(true);
-
         this.transform.SetParent(crossGliderGO.transform);
         glideRig.weight = 1;
     }
@@ -359,15 +395,11 @@ public class PlayerScript : MonoBehaviour
     {
         isDrinking = true;
         animator.SetBool(IS_DRINKING, true);
-
-        // Optional: stop movement immediately
         isMoving = false;
         crossReferrence.SetActive(false);
         cupGO.SetActive(true);
 
-        //To Add:
-        // - VFX
-        // - Button Press for Interactivity
+        Debug.Log("Started drinking water");
     }
 
     public void StopDrinking()
@@ -379,11 +411,56 @@ public class PlayerScript : MonoBehaviour
     }
 
     // == ANIMATION EVENTS ==
+
+    public void AnimationEvent_EndDrinking()
+    {
+        Debug.Log("Drinking animation ended");
+        currentWaterAmount++;
+        Debug.Log($"Current water: {currentWaterAmount}/{canvasTrigger.drinkMax}");
+        OnDrinkComplete();
+    }
+
+    private void OnDrinkComplete()
+    {
+        if (currentWaterAmount >= canvasTrigger.drinkMax)
+        {
+            Debug.Log("Max water reached! Drinking complete.");
+            CompleteDrinking();
+        }
+        else
+        {
+            Debug.Log(
+                $"Need more water. Press K to continue drinking. ({currentWaterAmount}/{canvasTrigger.drinkMax})"
+            );
+            crossReferrence.SetActive(true);
+            isDrinking = false;
+            animator.SetBool(IS_DRINKING, false);
+        }
+    }
+
+    private void CompleteDrinking()
+    {
+        isDrinking = false;
+        animator.SetBool(IS_DRINKING, false);
+        cupGO.SetActive(false);
+        crossReferrence.SetActive(true);
+        currentWaterAmount = 0;
+        isNearWaterFountain = false;
+
+        Debug.Log("Drinking fully complete! Player can now move.");
+        canvasTrigger.DeactivateCanvas();
+        currentWaterAmount = 0;
+        canvasTrigger = null;
+    }
+
+    private void OnDrinkingBenefits()
+    {
+        Debug.Log("Player received drinking benefits!");
+    }
+
     public void AnimationEvent_StartCasting()
     {
         crossReferrence.transform.SetParent(hitAnchor);
-        
-
         crossReferrence.transform.localPosition = hitOffset;
         crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(hitRotationOffset);
     }
@@ -396,6 +473,9 @@ public class PlayerScript : MonoBehaviour
 
     public void AnimationEvent_EndCasting()
     {
+        // Check for enemies in hitPoint's radius and apply damage
+        CheckAndDamageEnemies();
+        
         crossCol.enabled = false;
         isCasting = false;
         animator.SetBool(IS_CASTING, false);
@@ -404,8 +484,127 @@ public class PlayerScript : MonoBehaviour
         crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
             initialRotationCrossOffset
         );
-
-        // crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(crossRotationOffset);
-        // crossReferrence.transform.position = crossOffset;
     }
+
+    // Check for enemies within hitPoint collider and apply damage
+    private void CheckAndDamageEnemies()
+    {
+        if (crossHitCol == null)
+        {
+            Debug.LogWarning("CrossHitCol collider is not assigned!");
+            return;
+        }
+
+        // Get all colliders overlapping with the crossHitCol sphere
+        Collider[] hitColliders = Physics.OverlapSphere(
+            crossHitCol.transform.position,
+            crossHitCol.radius * crossHitCol.transform.lossyScale.x, // Account for scale
+            enemyLayer
+        );
+
+        if (hitColliders.Length > 0)
+        {
+            Debug.Log($"Hit {hitColliders.Length} enemies!");
+            
+            foreach (Collider enemyCollider in hitColliders)
+            {
+                // Try to get a damage interface or component from the enemy
+                IDamageable damageable = enemyCollider.GetComponent<IDamageable>();
+                
+                if (damageable != null)
+                {
+                    damageable.TakeDamage(damageAmount);
+                    Debug.Log($"Dealt {damageAmount} damage to {enemyCollider.gameObject.name}");
+                }
+                else
+                {
+                    // Alternative: if enemies use a different damage method
+                    // Try to find EnemyHealth or similar component
+                    var enemyHealth = enemyCollider.GetComponent<WolfFSM>();
+                    if (enemyHealth != null)
+                    {
+                        enemyHealth.TakeDamage(damageAmount);
+                        Debug.Log($"Dealt {damageAmount} damage to {enemyCollider.gameObject.name}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Enemy {enemyCollider.gameObject.name} has no damage component!");
+                    }
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("No enemies hit.");
+        }
+    }
+
+    // DAMAGE SYSTEM - Splash effect directly in OnDamagedTaken
+    public void OnDamagedTaken(float damage)
+    {
+        currentHealth -= (int)damage;
+        
+        if (currentHealth < 0)
+            currentHealth = 0;
+
+        Debug.Log($"Player took {damage} damage. Current health: {currentHealth}/{maxHealth}");
+
+        // Immediately show damage splash effect
+        if (splashDamageImage != null)
+        {
+            StopAllCoroutines(); // Stop any existing fade coroutines
+            StartCoroutine(DamageFlashEffect());
+        }
+
+        if (currentHealth == 0)
+        {
+            OnPlayerDeath();
+        }
+    }
+
+    // Damage flash effect coroutine - runs immediately when damage is taken
+    private IEnumerator DamageFlashEffect()
+    {
+        // Instant flash to full color
+        splashDamageImage.color = flashColor;
+        
+        float elapsedTime = 0f;
+
+        // Fade out over flashDuration
+        while (elapsedTime < flashDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            
+            // Calculate how far through the fade we are (0 to 1)
+            float fadeProgress = elapsedTime / flashDuration;
+            
+            // Smoothly interpolate alpha from flashColor.a to 0
+            float alpha = Mathf.Lerp(flashColor.a, 0f, fadeProgress);
+            
+            // Apply the fading color
+            splashDamageImage.color = new Color(
+                flashColor.r,
+                flashColor.g,
+                flashColor.b,
+                alpha
+            );
+
+            yield return null; // Wait one frame
+        }
+
+        // Ensure it ends completely transparent
+        splashDamageImage.color = Color.clear;
+    }
+
+    void OnPlayerDeath()
+    {
+        Debug.Log("Player has died.");
+        // Implement death behavior (e.g., respawn, game over screen, etc.)
+    }
+}
+
+// Interface for damageable entities
+public interface IDamageable
+{
+    void TakeDamage(float damage);
 }
