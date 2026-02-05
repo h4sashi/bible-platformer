@@ -313,6 +313,7 @@ public class WolfFSM : MonoBehaviour, IDamageable
         }
 
          Destroy(this.GetComponent<Rigidbody>());
+         Destroy(this.GetComponent<SphereCollider>());
         // Destroy(this.GetComponent<Animator>());
 
         // Play death sound

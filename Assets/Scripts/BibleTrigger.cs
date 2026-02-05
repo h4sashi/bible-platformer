@@ -6,6 +6,12 @@ using UnityEngine;
 
 public class BibleTrigger : MonoBehaviour
 {
+     public enum TriggerType{ GlideZoneOn, GlideZoneOff, WaterFountain, RockObstacle}
+   
+
+    public TriggerType triggerType;
+
+    
     [TextArea]
     public string verse;
 

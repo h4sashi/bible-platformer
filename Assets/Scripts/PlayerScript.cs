@@ -45,8 +45,6 @@ public class PlayerScript : MonoBehaviour
 
     private bool isBreathing;
     private Vector3 moveDirection;
-    private bool isBlockedForward = false;
-    private float blockDirection = 0f;
 
     private float targetRigWeight;
 
@@ -57,6 +55,11 @@ public class PlayerScript : MonoBehaviour
     // Water Fountain interaction
     private bool isNearWaterFountain = false;
     private GameObject currentWaterFountain;
+
+    // Rock Obstacle interaction
+    private bool isBlockedByRock = false;
+    private Vector3 rockObstaclePosition;
+    private Vector3 lastValidPosition;
 
     // Animation parameter names
     private const string MOVE_ANIMATION = "Walk";
@@ -91,19 +94,28 @@ public class PlayerScript : MonoBehaviour
 
     [Header("Player Attack Settings")]
     public SphereCollider crossHitCol;
-   
+
     public LayerMask enemyLayer; // Layer mask to identify enemies
     public float damageAmount = 25f; // Damage to apply to enemies
+
+    [Header("Mobile Controls")]
+    [SerializeField]
+    private bool useMobileControls = false;
+    private float mobileHorizontalInput;
+    private bool mobileCastPressed = false;
 
     private void Awake()
     {
         glideRig.weight = 0;
         currentHealth = maxHealth;
-        
+
         if (splashDamageImage != null)
         {
             splashDamageImage.color = Color.clear;
         }
+
+        // Store initial position as valid
+        lastValidPosition = transform.position;
     }
 
     void Start()
@@ -174,6 +186,23 @@ public class PlayerScript : MonoBehaviour
         }
     }
 
+    // MOBILE UI CALL BACKS
+
+    public void OnMoveLeftDown()
+    {
+        mobileHorizontalInput = -1f;
+    }
+
+    public void OnMoveRightDown()
+    {
+        mobileHorizontalInput = 1f;
+    }
+
+    public void OnMoveButtonUp()
+    {
+        mobileHorizontalInput = 0f;
+    }
+
     void DisableAllMovements()
     {
         isMoving = false;
@@ -181,9 +210,27 @@ public class PlayerScript : MonoBehaviour
         isDrinking = false;
     }
 
+    public void OnCastButtonDown()
+    {
+        mobileCastPressed = true;
+    }
+
+    public void OnCastButtonUp()
+    {
+        mobileCastPressed = false;
+    }
+
     void GetInput()
     {
-        horizontalInput = Input.GetAxisRaw("Horizontal");
+        if (useMobileControls)
+        {
+            horizontalInput = mobileHorizontalInput;
+        }
+        else
+        {
+            horizontalInput = Input.GetAxisRaw("Horizontal");
+        }
+
         isMoving =
             !isBreathing
             && !isDrinking
@@ -194,10 +241,26 @@ public class PlayerScript : MonoBehaviour
 
     void HandleCastingInput()
     {
-        if (Input.GetKeyDown(KeyCode.G) && !isCasting && !isBreathing && !isDrinking)
+        bool castRequested = false;
+
+        if (useMobileControls)
+        {
+            castRequested = mobileCastPressed;
+        }
+        else
+        {
+            castRequested = Input.GetKeyDown(KeyCode.G);
+        }
+        if (castRequested && !isCasting && !isBreathing && !isDrinking && !isGliding)
         {
             StartCasting();
         }
+
+        mobileCastPressed = false;
+        // if (Input.GetKeyDown(KeyCode.G) && !isCasting && !isBreathing && !isDrinking)
+        // {
+        //     StartCasting();
+        // }
     }
 
     void HandleDrinkingInput()
@@ -232,14 +295,37 @@ public class PlayerScript : MonoBehaviour
     {
         if (isMoving)
         {
-            if (isBlockedForward && Mathf.Sign(horizontalInput) == Mathf.Sign(blockDirection))
+            moveDirection = new Vector3(0, 0, horizontalInput);
+            Vector3 intendedPosition =
+                transform.position + (moveDirection * moveSpeed * Time.deltaTime);
+
+            // Check if blocked by rock obstacle
+            if (isBlockedByRock && IsMovingTowardRock(intendedPosition))
             {
+                // Block forward movement toward rock
                 return;
             }
 
-            moveDirection = new Vector3(0, 0, horizontalInput);
+            // Store position before moving (for potential rollback)
+            lastValidPosition = transform.position;
+
+            // Apply movement
             transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
         }
+    }
+
+    /// <summary>
+    /// Determines if the intended movement is toward the rock obstacle
+    /// </summary>
+    private bool IsMovingTowardRock(Vector3 intendedPosition)
+    {
+        // Calculate direction vectors
+        Vector3 currentToRock = rockObstaclePosition - transform.position;
+        Vector3 intendedToRock = rockObstaclePosition - intendedPosition;
+
+        // If moving closer to the rock (distance decreasing), block movement
+        // We use sqrMagnitude for performance (avoids sqrt calculation)
+        return intendedToRock.sqrMagnitude < currentToRock.sqrMagnitude;
     }
 
     void HandleRotation()
@@ -316,18 +402,6 @@ public class PlayerScript : MonoBehaviour
 
         if (
             other.CompareTag("ActionTrigger")
-            && other.name == "Glide Zone"
-            && !isDrinking
-            && !isBreathing
-            && !isCasting
-        )
-        {
-            StartGliding();
-            crossGliderGO.GetComponent<GlideTrigger>().IsPlayerGliding = true;
-        }
-
-        if (
-            other.CompareTag("ActionTrigger")
             && other.name == "Glide Zone Off"
             && !isDrinking
             && !isBreathing
@@ -345,8 +419,21 @@ public class PlayerScript : MonoBehaviour
             && !isCasting
         )
         {
-            isBlockedForward = true;
-            blockDirection = horizontalInput;
+            // Player is blocked by rock - can't move forward, but can move backward
+            isBlockedByRock = true;
+            rockObstaclePosition = other.transform.position;
+            Debug.Log("Blocked by rock obstacle - move backward to escape");
+        }
+    }
+
+    public void GlideZoneOnTrigger(CameraTrigger ct)
+    {
+        if (!isDrinking && !isBreathing && !isCasting)
+        {
+            StartGliding();
+            // glideRig.weight = 0;
+            ct.enableEvents?.Invoke();
+            crossGliderGO.GetComponent<GlideTrigger>().IsPlayerGliding = true;
         }
     }
 
@@ -354,8 +441,9 @@ public class PlayerScript : MonoBehaviour
     {
         if (other.CompareTag("ActionTrigger") && other.name == "RockObstacle")
         {
-            isBlockedForward = false;
-            blockDirection = 0f;
+            // Player has moved away from rock - can move freely again
+            isBlockedByRock = false;
+            Debug.Log("Escaped rock obstacle");
         }
 
         if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
@@ -475,7 +563,7 @@ public class PlayerScript : MonoBehaviour
     {
         // Check for enemies in hitPoint's radius and apply damage
         CheckAndDamageEnemies();
-        
+
         crossCol.enabled = false;
         isCasting = false;
         animator.SetBool(IS_CASTING, false);
@@ -505,12 +593,12 @@ public class PlayerScript : MonoBehaviour
         if (hitColliders.Length > 0)
         {
             Debug.Log($"Hit {hitColliders.Length} enemies!");
-            
+
             foreach (Collider enemyCollider in hitColliders)
             {
                 // Try to get a damage interface or component from the enemy
                 IDamageable damageable = enemyCollider.GetComponent<IDamageable>();
-                
+
                 if (damageable != null)
                 {
                     damageable.TakeDamage(damageAmount);
@@ -524,11 +612,15 @@ public class PlayerScript : MonoBehaviour
                     if (enemyHealth != null)
                     {
                         enemyHealth.TakeDamage(damageAmount);
-                        Debug.Log($"Dealt {damageAmount} damage to {enemyCollider.gameObject.name}");
+                        Debug.Log(
+                            $"Dealt {damageAmount} damage to {enemyCollider.gameObject.name}"
+                        );
                     }
                     else
                     {
-                        Debug.LogWarning($"Enemy {enemyCollider.gameObject.name} has no damage component!");
+                        Debug.LogWarning(
+                            $"Enemy {enemyCollider.gameObject.name} has no damage component!"
+                        );
                     }
                 }
             }
@@ -543,7 +635,7 @@ public class PlayerScript : MonoBehaviour
     public void OnDamagedTaken(float damage)
     {
         currentHealth -= (int)damage;
-        
+
         if (currentHealth < 0)
             currentHealth = 0;
 
@@ -567,27 +659,22 @@ public class PlayerScript : MonoBehaviour
     {
         // Instant flash to full color
         splashDamageImage.color = flashColor;
-        
+
         float elapsedTime = 0f;
 
         // Fade out over flashDuration
         while (elapsedTime < flashDuration)
         {
             elapsedTime += Time.deltaTime;
-            
+
             // Calculate how far through the fade we are (0 to 1)
             float fadeProgress = elapsedTime / flashDuration;
-            
+
             // Smoothly interpolate alpha from flashColor.a to 0
             float alpha = Mathf.Lerp(flashColor.a, 0f, fadeProgress);
-            
+
             // Apply the fading color
-            splashDamageImage.color = new Color(
-                flashColor.r,
-                flashColor.g,
-                flashColor.b,
-                alpha
-            );
+            splashDamageImage.color = new Color(flashColor.r, flashColor.g, flashColor.b, alpha);
 
             yield return null; // Wait one frame
         }

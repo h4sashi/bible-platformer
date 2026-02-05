@@ -16,7 +16,7 @@ namespace TinyGiantStudio.Layout
         {
             if (transform.position != targetPosition)
             {
-                GetComponent<Rigidbody>().velocity += gravitationalAcceleration * Time.fixedTime * (targetPosition - transform.position);
+                GetComponent<Rigidbody>().linearVelocity += gravitationalAcceleration * Time.fixedTime * (targetPosition - transform.position);
                 ////GetComponent<Rigidbody>().AddForce((targetPosition - transform.position) * gravitationalAcceleration * Time.deltaTime);
                 //Vector3 direction = targetPosition - transform.position;
                 //GetComponent<Rigidbody>().AddForceAtPosition(direction.normalized, transform.position);

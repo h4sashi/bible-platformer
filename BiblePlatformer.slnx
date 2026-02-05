@@ -1,0 +1,13 @@
+﻿<Solution>
+  <Project Path="Assembly-CSharp-firstpass.csproj" />
+  <Project Path="Boxophobic.Utils.Editor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Polyperfect.Common.csproj" />
+  <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
+  <Project Path="Polyperfect.Animals.csproj" />
+  <Project Path="Boxophobic.Utils.Scripts.csproj" />
+  <Project Path="TGS_PackageImporter.csproj" />
+  <Project Path="Boxophobic.PolyverseSkies.Scripts.csproj" />
+  <Project Path="Boxophobic.PolyverseSkies.Editor.csproj" />
+  <Project Path="Boxophobic.PolyverseSkies.Runtime.csproj" />
+</Solution>

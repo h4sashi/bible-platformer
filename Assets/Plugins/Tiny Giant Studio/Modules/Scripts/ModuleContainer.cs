@@ -55,7 +55,7 @@ namespace TinyGiantStudio.Modules
         //[HideInInspector]
         public GameObject gameObjectValue;
         //[HideInInspector]
-        public PhysicMaterial physicMaterialValue;
+        public PhysicsMaterial physicMaterialValue;
         //[HideInInspector]
         public string hideIf;
         //[HideInInspector]

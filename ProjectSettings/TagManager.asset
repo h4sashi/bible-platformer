@@ -6,6 +6,7 @@ TagManager:
   tags:
   - ActionTrigger
   - Cross
+  - TriggerObstacle
   layers:
   - Default
   - TransparentFX

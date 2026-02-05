@@ -4,6 +4,16 @@ using UnityEngine;
 
 public class GenericTrigger : MonoBehaviour
 {
+    public enum TriggerType
+    {
+        GlideZoneOn,
+        GlideZoneOff,
+        WaterFountain,
+        RockObstacle,
+    }
+
+    public TriggerType triggerType;
+
     public int numberOfHits;
     public int maxHits;
     public GameObject[] targetObjects;
@@ -85,56 +95,54 @@ public class GenericTrigger : MonoBehaviour
 
         Debug.Log("Hit complete! Launching objects...");
 
-        
+        foreach (GameObject obj in targetObjects)
+        {
+            if (obj == null)
+                continue;
 
-            foreach (GameObject obj in targetObjects)
+            // Get or add Rigidbody
+            Rigidbody rb = obj.GetComponent<Rigidbody>();
+            if (rb == null)
             {
-                if (obj == null)
-                    continue;
-
-                // Get or add Rigidbody
-                Rigidbody rb = obj.GetComponent<Rigidbody>();
-                if (rb == null)
-                {
-                    rb = obj.AddComponent<Rigidbody>();
-                }
-
-                // Enable physics
-                rb.isKinematic = false;
-                rb.useGravity = true;
-
-                // Calculate random force direction
-                float upwardForce = Random.Range(minUpwardForce, maxUpwardForce);
-                float sideForceX = Random.Range(-minSideForce, maxSideForce);
-                float sideForceZ = Random.Range(-minSideForce, maxSideForce);
-
-                Vector3 randomForce = new Vector3(sideForceX, upwardForce, sideForceZ);
-
-                // Apply force
-                rb.AddForce(randomForce, ForceMode.Impulse);
-
-                // Add random torque for spinning effect
-                Vector3 randomTorque = new Vector3(
-                    Random.Range(minTorque, maxTorque),
-                    Random.Range(minTorque, maxTorque),
-                    Random.Range(minTorque, maxTorque)
-                );
-                rb.AddTorque(randomTorque);
-
-                // Optional: Destroy after delay
-                if (destroyAfterDelay)
-                {
-                    waterCanvas.SetActive(false);
-                    Destroy(obj, destroyDelay);
-                    StartCoroutine(EnableWaterFountain(.1f));
-                }
+                rb = obj.AddComponent<Rigidbody>();
             }
 
-            // Optional: Add camera shake effect
-            if (CameraShake.Instance != null)
+            // Enable physics
+            rb.isKinematic = false;
+            rb.useGravity = true;
+
+            // Calculate random force direction
+            float upwardForce = Random.Range(minUpwardForce, maxUpwardForce);
+            float sideForceX = Random.Range(-minSideForce, maxSideForce);
+            float sideForceZ = Random.Range(-minSideForce, maxSideForce);
+
+            Vector3 randomForce = new Vector3(sideForceX, upwardForce, sideForceZ);
+
+            // Apply force
+            rb.AddForce(randomForce, ForceMode.Impulse);
+
+            // Add random torque for spinning effect
+            Vector3 randomTorque = new Vector3(
+                Random.Range(minTorque, maxTorque),
+                Random.Range(minTorque, maxTorque),
+                Random.Range(minTorque, maxTorque)
+            );
+            rb.AddTorque(randomTorque);
+
+            // Optional: Destroy after delay
+            if (destroyAfterDelay)
             {
-                CameraShake.Instance.ShakeMedium();
+                waterCanvas.SetActive(false);
+                Destroy(obj, destroyDelay);
+                StartCoroutine(EnableWaterFountain(.1f));
             }
+        }
+
+        // Optional: Add camera shake effect
+        if (CameraShake.Instance != null)
+        {
+            CameraShake.Instance.ShakeMedium();
+        }
     }
 
     IEnumerator EnableWaterFountain(float y)

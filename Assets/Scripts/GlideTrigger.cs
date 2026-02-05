@@ -4,6 +4,17 @@ using UnityEngine;
 
 public class GlideTrigger : MonoBehaviour
 {
+    public enum TriggerType
+    {
+        GlideZoneOn,
+        GlideZoneOff,
+        WaterFountain,
+        RockObstacle,
+        Cross
+    }
+
+    public TriggerType triggerType;
+
     [Header("Gliding Settings")]
     public bool IsPlayerGliding = false;
     public Transform player;
@@ -18,7 +29,13 @@ public class GlideTrigger : MonoBehaviour
     private float horizontalInput;
     private Vector3 moveDirection;
 
-    private void Start() {
+    [Header("Mobile Controls")]
+    [SerializeField]
+    private bool useMobileControls = false;
+    private float mobileHorizontalInput;
+
+    private void Start()
+    {
         player = GameObject.FindGameObjectWithTag("Player").transform;
     }
 
@@ -37,10 +54,34 @@ public class GlideTrigger : MonoBehaviour
         }
     }
 
+    // MOBILE UI CALL BACKS
+
+    public void OnMoveLeftDown()
+    {
+        mobileHorizontalInput = -1f;
+    }
+
+    public void OnMoveRightDown()
+    {
+        mobileHorizontalInput = 1f;
+    }
+
+    public void OnMoveButtonUp()
+    {
+        mobileHorizontalInput = 0f;
+    }
+
     void GetGlideInput()
     {
-        // Get horizontal input (A/D or Left/Right arrow keys)
-        horizontalInput = Input.GetAxisRaw("Horizontal");
+        if (useMobileControls)
+        {
+            horizontalInput = mobileHorizontalInput;
+        }
+        else
+        {
+            // Get horizontal input (A/D or Left/Right arrow keys)
+            horizontalInput = horizontalInput = Input.GetAxisRaw("Horizontal");
+        }
     }
 
     void HandleGlideMovement()
@@ -70,15 +111,16 @@ public class GlideTrigger : MonoBehaviour
                 // Moving right - rotate to face right (0 degrees on Y-axis)
                 targetRotation = Quaternion.Euler(0, 90f, 0);
             }
-
-           
         }
     }
 
     private void OnCollisionEnter(Collision other)
     {
-        if (other.gameObject.CompareTag("Player"))
+        if (other.gameObject.CompareTag("Player") && triggerType == TriggerType.Cross)
         {
+
+            Debug.Log("Player has entered cross");
+            
             PlayerScript playerScript = other.gameObject.GetComponent<PlayerScript>();
             if (playerScript != null)
             {
