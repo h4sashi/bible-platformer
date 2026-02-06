@@ -110,7 +110,14 @@ public class GenericTrigger : MonoBehaviour
 
         isCompleted = true;
 
-        Debug.Log("Hit complete! Launching objects...");
+       Debug.Log("Hit complete! Launching objects...");
+
+    // Notify player that pulling is complete
+    if (playerScript != null && triggerType == TriggerType.RockObstacle)
+    {
+        playerScript.OnRockObstacleComplete();
+    }
+
 
         foreach (GameObject obj in targetObjects)
         {
