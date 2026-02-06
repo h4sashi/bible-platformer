@@ -400,30 +400,43 @@ public class PlayerScript : MonoBehaviour
             canvasTrigger?.ActivateCanvas();
         }
 
-        if (
-            other.CompareTag("ActionTrigger")
-            && other.name == "Glide Zone Off"
-            && !isDrinking
-            && !isBreathing
-            && !isCasting
-        )
-        {
-            StopGliding();
-        }
+        // if (
+        //     other.CompareTag("ActionTrigger")
+        //     && other.name == "Glide Zone Off"
+        //     && !isDrinking
+        //     && !isBreathing
+        //     && !isCasting
+        // )
+        // {
+        //     StopGliding();
+        // }
 
-        if (
-            other.CompareTag("ActionTrigger")
-            && other.name == "RockObstacle"
-            && !isDrinking
-            && !isBreathing
-            && !isCasting
-        )
-        {
-            // Player is blocked by rock - can't move forward, but can move backward
-            isBlockedByRock = true;
-            rockObstaclePosition = other.transform.position;
-            Debug.Log("Blocked by rock obstacle - move backward to escape");
-        }
+        // if (
+        //     other.CompareTag("ActionTrigger")
+        //     && other.name == "RockObstacle"
+        //     && !isDrinking
+        //     && !isBreathing
+        //     && !isCasting
+        // )
+        // {
+        //     // Player is blocked by rock - can't move forward, but can move backward
+          
+        // }
+    }
+
+    public void OnRockObstacleTriggerEnter(Vector3 rockPosition)
+    {
+        isBlockedByRock = true;
+        rockObstaclePosition = rockPosition;
+        Debug.Log("Blocked by rock obstacle - cannot move forward");
+
+        
+    }
+
+    public void OnRockObstacleTriggerExit()
+    {
+        isBlockedByRock = false;
+        Debug.Log("Exited rock obstacle area - can move freely");
     }
 
     public void GlideZoneOnTrigger(CameraTrigger ct)
@@ -439,12 +452,12 @@ public class PlayerScript : MonoBehaviour
 
     void OnTriggerExit(Collider other)
     {
-        if (other.CompareTag("ActionTrigger") && other.name == "RockObstacle")
-        {
-            // Player has moved away from rock - can move freely again
-            isBlockedByRock = false;
-            Debug.Log("Escaped rock obstacle");
-        }
+        // if (other.CompareTag("ActionTrigger") && other.name == "RockObstacle")
+        // {
+        //     // Player has moved away from rock - can move freely again
+        //     isBlockedByRock = false;
+        //     Debug.Log("Escaped rock obstacle");
+        // }
 
         if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
         {

@@ -84,7 +84,24 @@ public class GenericTrigger : MonoBehaviour
                 }
             }
         }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.RockObstacle)
+        {
+            Debug.Log("Player has hit Rock Obstacle");
+            other.GetComponent<PlayerScript>().OnRockObstacleTriggerEnter(this.transform.position);
+        }
     }
+
+     void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("Player") && triggerType == TriggerType.RockObstacle)
+        {
+            Debug.Log("Player has exited Rock Obstacle Zone");
+            other.GetComponent<PlayerScript>().OnRockObstacleTriggerExit();
+        }
+    }
+
+
 
     void OnHitComplete()
     {
@@ -134,7 +151,7 @@ public class GenericTrigger : MonoBehaviour
             {
                 waterCanvas.SetActive(false);
                 Destroy(obj, destroyDelay);
-                StartCoroutine(EnableWaterFountain(.1f));
+                StartCoroutine(EnableWaterFountain((.1f)));
             }
         }
 
