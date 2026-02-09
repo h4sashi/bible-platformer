@@ -61,38 +61,75 @@ public class GenericTrigger : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Cross"))
+        if (other.CompareTag("Player"))
         {
-            if (playerScript != null)
-            {
-                if (playerScript.isCasting == true && !isCompleted)
-                {
-                    // Check cooldown
-                    if (Time.time - lastHitTime >= hitCooldown)
-                    {
-                        numberOfHits++;
-                        lastHitTime = Time.time;
-
-                        Debug.Log($"Hit registered! Total hits: {numberOfHits}/{maxHits}");
-
-                        // Check if we've reached max hits
-                        if (numberOfHits >= maxHits)
-                        {
-                            OnHitComplete();
-                        }
-                    }
-                }
-            }
+            // Debug.Log("Player entered trigger zone");
         }
 
         if (other.CompareTag("Player") && triggerType == TriggerType.RockObstacle)
         {
             Debug.Log("Player has hit Rock Obstacle");
             other.GetComponent<PlayerScript>().OnRockObstacleTriggerEnter(this.transform.position);
+
+            // if (playerScript != null && !isCompleted)
+            // {
+            //     // Check if player is PULLING
+            //     if (
+            //         (playerScript.IsPulling)
+            //         && Time.time - lastHitTime >= hitCooldown
+            //     )
+            //     {
+            //         numberOfHits++;
+            //         lastHitTime = Time.time;
+
+            //         Debug.Log($"Hit registered! Total hits: {numberOfHits}/{maxHits}");
+
+            //         // Check if we've reached max hits
+            //         if (numberOfHits >= maxHits)
+            //         {
+            //             OnHitComplete();
+            //         }
+            //     }
+            // }
         }
     }
 
-     void OnTriggerExit(Collider other)
+    
+
+  void OnTriggerStay(Collider other)
+{
+    if (other.CompareTag("Player") && triggerType == TriggerType.RockObstacle)
+    {
+        if (playerScript != null && !isCompleted)
+        {
+            // Check if pull animation just completed (one-time hit per pull)
+            if (playerScript.IsPullAnimationComplete && Time.time - lastHitTime >= hitCooldown)
+            {
+                numberOfHits++;
+                lastHitTime = Time.time;
+
+                Debug.Log($"Pull hit registered! Total hits: {numberOfHits}/{maxHits}");
+
+                // Reset the completion flag so it doesn't register multiple times
+                playerScript.ResetPullCompletion();
+
+                // Visual feedback
+                if (CameraShake.Instance != null)
+                {
+                    CameraShake.Instance.ShakeLight();
+                }
+
+                // Check if we've reached max hits
+                if (numberOfHits >= maxHits)
+                {
+                    OnHitComplete();
+                }
+            }
+        }
+    }
+}
+
+    void OnTriggerExit(Collider other)
     {
         if (other.CompareTag("Player") && triggerType == TriggerType.RockObstacle)
         {
@@ -101,8 +138,6 @@ public class GenericTrigger : MonoBehaviour
         }
     }
 
-
-
     void OnHitComplete()
     {
         if (isCompleted)
@@ -110,14 +145,13 @@ public class GenericTrigger : MonoBehaviour
 
         isCompleted = true;
 
-       Debug.Log("Hit complete! Launching objects...");
+        Debug.Log("Hit complete! Launching objects...");
 
-    // Notify player that pulling is complete
-    if (playerScript != null && triggerType == TriggerType.RockObstacle)
-    {
-        playerScript.OnRockObstacleComplete();
-    }
-
+        // Notify player that pulling is complete
+        if (playerScript != null && triggerType == TriggerType.RockObstacle)
+        {
+            playerScript.OnRockObstacleComplete();
+        }
 
         foreach (GameObject obj in targetObjects)
         {

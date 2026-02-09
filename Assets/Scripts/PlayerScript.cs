@@ -105,19 +105,26 @@ public class PlayerScript : MonoBehaviour
     private bool mobileCastPressed = false;
 
     [Header("Pull Settings")]
-    [SerializeField]
-    private float pullSpeedIncreaseRate = 0.5f; // How fast pull speed increases (adjust in inspector)
+    private const string PULL_TRIGGER = "Pull";
 
-    [SerializeField]
-    private float pullSpeedDecreaseRate = 1.0f; // How fast pull speed decreases when released
+    private bool isPulling;
+    private bool canPull;
+    private bool pullAnimationComplete = false;
 
-    // Add this constant with your other animation parameter names
-    private const string PULL_SPEED = "Blend";
+    public bool IsPulling
+    {
+        get { return isPulling; }
+    }
 
-    private bool isPulling; // Track if player is pulling
-    private bool canPull; // Track if player is near rock obstacle
-    private bool isPullButtonHeld; // Track if pull button is being held
-    private float currentPullSpeed = 0f; // Current pull speed value
+    public bool IsPullAnimationComplete
+    {
+        get { return pullAnimationComplete; }
+    }
+
+    [Header("Rock Settings")]
+    public GameObject crossRockGO;
+    public Vector3 rockPushInitialAngle;
+    public Vector3 rockPushAngle;
 
     private void Awake()
     {
@@ -174,49 +181,48 @@ public class PlayerScript : MonoBehaviour
     }
 
     void Update()
-{
-    GetInput();
-
-    if (isNearWaterFountain)
     {
-        isMoving = false;
-        horizontalInput = 0f;
+        GetInput();
+
+        if (isNearWaterFountain)
+        {
+            isMoving = false;
+            horizontalInput = 0f;
+        }
+
+        if (!isBreathing && !isDrinking && !isCasting && !isGliding && !isPulling)
+        {
+            HandleMovement();
+            HandleRotation();
+        }
+
+        HandleAnimation();
+        HandleRigWeight();
+        HandleCastingInput();
+        HandleDrinkingInput();
+        HandlePullingInput(); // Keyboard input
+        // Remove this line: HandlePulling(); // ❌ DELETE THIS LINE
+
+        if (isGliding == true)
+        {
+            this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
+            DisableAllMovements();
+        }
     }
 
-    if (!isBreathing && !isDrinking && !isCasting && !isGliding && !isPulling)
+    void HandlePullingInput()
     {
-        HandleMovement();
-        HandleRotation();
-    }
+        // Hold P key to pull
+        if (Input.GetKeyDown(KeyCode.P) && canPull)
+        {
+            OnPullButtonDown();
+        }
 
-    HandleAnimation();
-    HandleRigWeight();
-    HandleCastingInput();
-    HandleDrinkingInput();
-    HandlePullingInput(); // Keyboard input
-    HandlePulling(); // Add this - handles the lerping
-
-    if (isGliding == true)
-    {
-        this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
-        DisableAllMovements();
+        if (Input.GetKeyUp(KeyCode.P))
+        {
+            OnPullButtonUp();
+        }
     }
-}
-
-    
-void HandlePullingInput()
-{
-    // Hold P key to pull
-    if (Input.GetKeyDown(KeyCode.P) && canPull)
-    {
-        OnPullButtonDown();
-    }
-    
-    if (Input.GetKeyUp(KeyCode.P))
-    {
-        OnPullButtonUp();
-    }
-}
 
     // MOBILE UI CALL BACKS
 
@@ -235,16 +241,16 @@ void HandlePullingInput()
         mobileHorizontalInput = 0f;
     }
 
-   void DisableAllMovements()
-{
-    isMoving = false;
-    isCasting = false;
-    isDrinking = false;
-    isPulling = false;
-    isPullButtonHeld = false;
-    currentPullSpeed = 0f;
-    animator.SetFloat(PULL_SPEED, 0f);
-}
+    void DisableAllMovements()
+    {
+        isMoving = false;
+        isCasting = false;
+        isDrinking = false;
+        isPulling = false;
+        // isPullButtonHeld = false;
+        pullAnimationComplete = false;
+        // animator.SetBool(IS_PULLING, false);
+    }
 
     public void OnCastButtonDown()
     {
@@ -395,33 +401,6 @@ void HandlePullingInput()
         }
     }
 
-    // void HandleRigWeight()
-    // {
-    //     if (walkRig == null || armRig == null || glideRig == null)
-    //         return;
-
-    //     if (isBreathing || isDrinking || isCasting || isGliding)
-    //     {
-    //         targetRigWeight = 0f;
-    //     }
-    //     else
-    //     {
-    //         targetRigWeight = 1f;
-    //     }
-
-    //     walkRig.weight = Mathf.Lerp(
-    //         walkRig.weight,
-    //         targetRigWeight,
-    //         Time.deltaTime * rigTransitionSpeed
-    //     );
-
-    //     armRig.weight = Mathf.Lerp(
-    //         armRig.weight,
-    //         targetRigWeight,
-    //         Time.deltaTime * rigTransitionSpeed
-    //     );
-    // }
-
     void HandleRigWeight()
     {
         if (walkRig == null || armRig == null || glideRig == null)
@@ -473,56 +452,64 @@ void HandlePullingInput()
         Debug.Log("Near rock obstacle - Can now pull");
     }
 
-    // Modify the existing OnRockObstacleTriggerExit method:
     public void OnRockObstacleTriggerExit()
     {
         isBlockedByRock = false;
         canPull = false;
         isPulling = false;
-        isPullButtonHeld = false;
-        currentPullSpeed = 0f;
+        // isPullButtonHeld = false;
+        pullAnimationComplete = false;
 
-        // Reset the pull speed to 0
-        animator.SetFloat(PULL_SPEED, 0f);
+        // Reset the bool
+        // animator.SetBool(IS_PULLING, false);
 
         Debug.Log("Exited rock obstacle area - can move freely");
     }
 
-    // Public method to be called when hits are complete:
     public void OnRockObstacleComplete()
     {
         isBlockedByRock = false;
         canPull = false;
         isPulling = false;
-        isPullButtonHeld = false;
-        currentPullSpeed = 0f;
+        // isPullButtonHeld = false;
+        pullAnimationComplete = false;
 
-        // Reset the pull speed to 0
-        animator.SetFloat(PULL_SPEED, 0f);
+        // Reset the bool
+        // animator.SetBool(IS_PULLING, false);
 
         Debug.Log("Rock obstacle cleared - Pull animation stopped");
     }
 
     // PUBLIC METHOD FOR PULL BUTTON - Call this from UI button or input
 
-    // Add to your MOBILE UI CALL BACKS section
-    // PUBLIC METHOD FOR PULL BUTTON DOWN - Call when button is pressed
     public void OnPullButtonDown()
     {
         if (canPull && !isDrinking && !isCasting && !isGliding && !isBreathing)
         {
-            isPullButtonHeld = true;
+            // Allow re-triggering by resetting isPulling immediately
             isPulling = true;
             isMoving = false;
+            pullAnimationComplete = false;
 
-            Debug.Log("Pull button pressed - Starting pull");
+            // Trigger the pull animation
+            animator.SetTrigger(PULL_TRIGGER);
+            if (crossRockGO.activeInHierarchy == false)
+            {
+                crossRockGO.SetActive(true);
+                crossReferrence.SetActive(false);
+            }
+            else
+            {
+                return;
+            }
+
+            Debug.Log("Pull triggered - ready for next pull");
         }
     }
 
-    // PUBLIC METHOD FOR PULL BUTTON UP - Call when button is released
     public void OnPullButtonUp()
     {
-        isPullButtonHeld = false;
+        // isPullButtonHeld = false;
 
         Debug.Log("Pull button released");
     }
@@ -536,36 +523,25 @@ void HandlePullingInput()
     }
 
     // Handle the smooth lerping of pull speed
+    // Handle the smooth lerping of pull speed
     void HandlePulling()
     {
-        if (isPulling && isPullButtonHeld)
-        {
-            // Smoothly increase pull speed to 1
-            currentPullSpeed = Mathf.Lerp(
-                currentPullSpeed,
-                1f,
-                pullSpeedIncreaseRate * Time.deltaTime
-            );
-        }
-        else if (isPulling && !isPullButtonHeld)
-        {
-            // Smoothly decrease pull speed back to 0
-            currentPullSpeed = Mathf.Lerp(
-                currentPullSpeed,
-                0f,
-                pullSpeedDecreaseRate * Time.deltaTime
-            );
+        // if (isPulling && isPullButtonHeld)
+        // {
+        //     // Reset the completion flag when starting a new pull
+        //     pullAnimationComplete = false;
 
-            // When pull speed is close to 0, stop pulling
-            if (currentPullSpeed < 0.01f)
-            {
-                currentPullSpeed = 0f;
-                isPulling = false;
-            }
-        }
+        //     // Set bool to true - triggers Pull animation
+        //     animator.SetBool(IS_PULLING, true);
+        // }
+        // else if (isPulling && !isPullButtonHeld)
+        // {
+        //     // Set bool to false - returns to Pull_Idle
+        //     animator.SetBool(IS_PULLING, false);
 
-        // Update animator parameter
-        animator.SetFloat(PULL_SPEED, currentPullSpeed);
+        //     // Stop pulling state
+        //     isPulling = false;
+        // }
     }
 
     void StartPulling()
@@ -573,21 +549,28 @@ void HandlePullingInput()
         isPulling = true;
         isMoving = false;
 
-        // Set the pull speed to 1 to trigger blend tree
-        animator.SetFloat(PULL_SPEED, 1.0f);
+        // animator.SetFloat(PULL_SPEED, 1.0f);
 
         Debug.Log("Started pulling");
     }
 
-    // ANIMATION EVENT - Add this to the END of your Pull animation
+    // Animation Event at the peak of Pull animation
+    public void AnimationEvent_PullHit()
+    {
+        pullAnimationComplete = true;
+        Debug.Log("Pull hit!");
+    }
+
+    // Animation Event at the end of Pull animation
     public void AnimationEvent_EndPulling()
     {
         isPulling = false;
-
-        // Reset pull speed back to 0
-        animator.SetFloat(PULL_SPEED, 0f);
-
         Debug.Log("Pull animation ended");
+    }
+
+    public void ResetPullCompletion()
+    {
+        pullAnimationComplete = false;
     }
 
     public void GlideZoneOnTrigger(CameraTrigger ct)
