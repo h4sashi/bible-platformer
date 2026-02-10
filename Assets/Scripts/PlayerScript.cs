@@ -11,6 +11,9 @@ public class PlayerScript : MonoBehaviour
     [Header("Movement Settings")]
     [SerializeField]
     private float moveSpeed = 5f;
+    
+    [Header("UI Buttons")]
+    public Button drinkButton; // Reference to the UI button for actions (e.g., drink)
 
     [SerializeField]
     private float smoothRotation = 10f;
@@ -125,6 +128,9 @@ public class PlayerScript : MonoBehaviour
     public GameObject crossRockGO;
     public Vector3 rockPushInitialAngle;
     public Vector3 rockPushAngle;
+    public float rockRotationSpeed = 2f; // Speed of rotation lerp
+    private bool isRotatingRock = false;
+    private float rockRotationProgress = 0f;
 
     private void Awake()
     {
@@ -138,6 +144,19 @@ public class PlayerScript : MonoBehaviour
 
         // Store initial position as valid
         lastValidPosition = transform.position;
+        
+        // Initialize rock rotation
+        if (crossRockGO != null)
+        {
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+        }
+        if(drinkButton != null)
+        {
+            drinkButton.interactable = false; // Disable drink button at start
+        }else
+        {
+            Debug.LogWarning("Drink button reference is missing!");
+        }
     }
 
     void Start()
@@ -201,12 +220,17 @@ public class PlayerScript : MonoBehaviour
         HandleCastingInput();
         HandleDrinkingInput();
         HandlePullingInput(); // Keyboard input
-        // Remove this line: HandlePulling(); // ❌ DELETE THIS LINE
+        HandleRockRotation(); // NEW: Handle rock rotation lerp
 
         if (isGliding == true)
         {
             this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
             DisableAllMovements();
+        }
+
+       if (isRotatingRock  == false && crossRockGO != null)
+        {
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
         }
     }
 
@@ -222,6 +246,27 @@ public class PlayerScript : MonoBehaviour
         {
             OnPullButtonUp();
         }
+    }
+
+    // NEW METHOD: Handle the smooth rotation of the rock
+    void HandleRockRotation()
+    {
+        if (!isRotatingRock || crossRockGO == null)
+            return;
+
+        // Increment the lerp progress
+        rockRotationProgress += Time.deltaTime * rockRotationSpeed;
+        rockRotationProgress = Mathf.Clamp01(rockRotationProgress);
+
+        // Lerp between initial and final rotation
+        Quaternion initialRot = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+        Quaternion targetRot = UnityEngine.Quaternion.Euler(rockPushAngle);
+        
+        crossRockGO.transform.localRotation = UnityEngine.Quaternion.Lerp(
+            initialRot, 
+            targetRot, 
+            rockRotationProgress
+        );
     }
 
     // MOBILE UI CALL BACKS
@@ -247,9 +292,7 @@ public class PlayerScript : MonoBehaviour
         isCasting = false;
         isDrinking = false;
         isPulling = false;
-        // isPullButtonHeld = false;
         pullAnimationComplete = false;
-        // animator.SetBool(IS_PULLING, false);
     }
 
     public void OnCastButtonDown()
@@ -299,10 +342,6 @@ public class PlayerScript : MonoBehaviour
         }
 
         mobileCastPressed = false;
-        // if (Input.GetKeyDown(KeyCode.G) && !isCasting && !isBreathing && !isDrinking)
-        // {
-        //     StartCasting();
-        // }
     }
 
     void HandleDrinkingInput()
@@ -457,11 +496,21 @@ public class PlayerScript : MonoBehaviour
         isBlockedByRock = false;
         canPull = false;
         isPulling = false;
-        // isPullButtonHeld = false;
         pullAnimationComplete = false;
-
-        // Reset the bool
-        // animator.SetBool(IS_PULLING, false);
+        
+        // UPDATED: Reset rock rotation and crosses
+        ResetRockRotation();
+        
+        // Ensure proper cross is active
+        if (crossRockGO != null && crossRockGO.activeInHierarchy)
+        {
+            crossRockGO.SetActive(false);
+        }
+        
+        if (crossReferrence != null && !crossReferrence.activeInHierarchy)
+        {
+            crossReferrence.SetActive(true);
+        }
 
         Debug.Log("Exited rock obstacle area - can move freely");
     }
@@ -471,11 +520,21 @@ public class PlayerScript : MonoBehaviour
         isBlockedByRock = false;
         canPull = false;
         isPulling = false;
-        // isPullButtonHeld = false;
         pullAnimationComplete = false;
-
-        // Reset the bool
-        // animator.SetBool(IS_PULLING, false);
+        
+        // UPDATED: Reset rock rotation and crosses
+        ResetRockRotation();
+        
+        // Ensure proper cross is active
+        if (crossRockGO != null && crossRockGO.activeInHierarchy)
+        {
+            crossRockGO.SetActive(false);
+        }
+        
+        if (crossReferrence != null && !crossReferrence.activeInHierarchy)
+        {
+            crossReferrence.SetActive(true);
+        }
 
         Debug.Log("Rock obstacle cleared - Pull animation stopped");
     }
@@ -497,6 +556,9 @@ public class PlayerScript : MonoBehaviour
             {
                 crossRockGO.SetActive(true);
                 crossReferrence.SetActive(false);
+                
+                // UPDATED: Start rotating the rock
+                // StartRockRotation(); - do not uncomment this line, it works as expected
             }
             else
             {
@@ -509,8 +571,6 @@ public class PlayerScript : MonoBehaviour
 
     public void OnPullButtonUp()
     {
-        // isPullButtonHeld = false;
-
         Debug.Log("Pull button released");
     }
 
@@ -522,26 +582,9 @@ public class PlayerScript : MonoBehaviour
         }
     }
 
-    // Handle the smooth lerping of pull speed
-    // Handle the smooth lerping of pull speed
     void HandlePulling()
     {
-        // if (isPulling && isPullButtonHeld)
-        // {
-        //     // Reset the completion flag when starting a new pull
-        //     pullAnimationComplete = false;
-
-        //     // Set bool to true - triggers Pull animation
-        //     animator.SetBool(IS_PULLING, true);
-        // }
-        // else if (isPulling && !isPullButtonHeld)
-        // {
-        //     // Set bool to false - returns to Pull_Idle
-        //     animator.SetBool(IS_PULLING, false);
-
-        //     // Stop pulling state
-        //     isPulling = false;
-        // }
+        // Method kept for compatibility but no longer used
     }
 
     void StartPulling()
@@ -549,9 +592,27 @@ public class PlayerScript : MonoBehaviour
         isPulling = true;
         isMoving = false;
 
-        // animator.SetFloat(PULL_SPEED, 1.0f);
-
         Debug.Log("Started pulling");
+    }
+
+    // NEW METHOD: Start the rock rotation
+    private void StartRockRotation()
+    {
+        isRotatingRock = true;
+        rockRotationProgress = 0f;
+    }
+
+    // NEW METHOD: Reset rock rotation instantly
+    public void ResetRockRotation()
+    {
+        Debug.Log("Resetting rock rotation");
+        isRotatingRock = false;
+        rockRotationProgress = 0f;
+        
+        if (crossRockGO != null)
+        {
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+        }
     }
 
     // Animation Event at the peak of Pull animation
@@ -565,6 +626,21 @@ public class PlayerScript : MonoBehaviour
     public void AnimationEvent_EndPulling()
     {
         isPulling = false;
+        
+        // UPDATED: Snap rock back to initial rotation and swap crosses
+        ResetRockRotation();
+        
+        // Deactivate rock cross and reactivate normal cross
+        if (crossRockGO != null && crossRockGO.activeInHierarchy)
+        {
+            crossRockGO.SetActive(false);
+        }
+        
+        if (crossReferrence != null && !crossReferrence.activeInHierarchy)
+        {
+            crossReferrence.SetActive(true);
+        }
+        
         Debug.Log("Pull animation ended");
     }
 
@@ -578,7 +654,6 @@ public class PlayerScript : MonoBehaviour
         if (!isDrinking && !isBreathing && !isCasting)
         {
             StartGliding();
-            // glideRig.weight = 0;
             ct.enableEvents?.Invoke();
             crossGliderGO.GetComponent<GlideTrigger>().IsPlayerGliding = true;
         }

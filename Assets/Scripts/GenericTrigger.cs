@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class GenericTrigger : MonoBehaviour
 {
@@ -19,6 +20,8 @@ public class GenericTrigger : MonoBehaviour
     public GameObject[] targetObjects;
     public GameObject waterFountain;
     public GameObject waterCanvas;
+
+    public Button actionBtn;
 
     [Header("Force Settings")]
     [SerializeField]
@@ -71,26 +74,14 @@ public class GenericTrigger : MonoBehaviour
             Debug.Log("Player has hit Rock Obstacle");
             other.GetComponent<PlayerScript>().OnRockObstacleTriggerEnter(this.transform.position);
 
-            // if (playerScript != null && !isCompleted)
-            // {
-            //     // Check if player is PULLING
-            //     if (
-            //         (playerScript.IsPulling)
-            //         && Time.time - lastHitTime >= hitCooldown
-            //     )
-            //     {
-            //         numberOfHits++;
-            //         lastHitTime = Time.time;
-
-            //         Debug.Log($"Hit registered! Total hits: {numberOfHits}/{maxHits}");
-
-            //         // Check if we've reached max hits
-            //         if (numberOfHits >= maxHits)
-            //         {
-            //             OnHitComplete();
-            //         }
-            //     }
-            // }
+                if (actionBtn != null)
+                {
+                    actionBtn.interactable = true;
+                }
+            else
+            {
+                Debug.LogWarning("Action button reference is missing!");
+            }
         }
     }
 
@@ -109,6 +100,7 @@ public class GenericTrigger : MonoBehaviour
                 lastHitTime = Time.time;
 
                 Debug.Log($"Pull hit registered! Total hits: {numberOfHits}/{maxHits}");
+                other.GetComponent<PlayerScript>().ResetRockRotation();
 
                 // Reset the completion flag so it doesn't register multiple times
                 playerScript.ResetPullCompletion();
@@ -123,6 +115,7 @@ public class GenericTrigger : MonoBehaviour
                 if (numberOfHits >= maxHits)
                 {
                     OnHitComplete();
+                    actionBtn.interactable = false; // Disable button after completion
                 }
             }
         }
@@ -135,6 +128,14 @@ public class GenericTrigger : MonoBehaviour
         {
             Debug.Log("Player has exited Rock Obstacle Zone");
             other.GetComponent<PlayerScript>().OnRockObstacleTriggerExit();
+                if (actionBtn != null)
+                {
+                    actionBtn.interactable = false;
+                }
+                else
+                {
+                    Debug.LogWarning("Action button reference is missing!");
+                }
         }
     }
 
