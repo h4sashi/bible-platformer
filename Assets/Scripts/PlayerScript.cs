@@ -11,7 +11,8 @@ public class PlayerScript : MonoBehaviour
     [Header("Movement Settings")]
     [SerializeField]
     private float moveSpeed = 5f;
-    
+    private Rigidbody rb;
+
     [Header("UI Buttons")]
     public Button drinkButton; // Reference to the UI button for actions (e.g., drink)
 
@@ -63,6 +64,12 @@ public class PlayerScript : MonoBehaviour
     private bool isBlockedByRock = false;
     private Vector3 rockObstaclePosition;
     private Vector3 lastValidPosition;
+
+    // FastStop interaction
+    private bool isBlockedByFastStop = false;
+    private Vector3 fastStopPosition;
+    private bool fastStopBlockLeft = false;
+    private bool fastStopBlockRight = false;
 
     // Animation parameter names
     private const string MOVE_ANIMATION = "Walk";
@@ -124,6 +131,17 @@ public class PlayerScript : MonoBehaviour
         get { return pullAnimationComplete; }
     }
 
+    [Header("Sleep Settings")]
+    public Vector3 sleepOffset;
+    private bool isSleeping;
+    private const string IS_SLEEPING = "isSleeping";
+
+    public bool IsSleeping
+    {
+        get { return isSleeping; }
+    }
+    
+
     [Header("Rock Settings")]
     public GameObject crossRockGO;
     public Vector3 rockPushInitialAngle;
@@ -136,6 +154,8 @@ public class PlayerScript : MonoBehaviour
     {
         glideRig.weight = 0;
         currentHealth = maxHealth;
+        isSleeping = false;
+        rb = GetComponent<Rigidbody>();
 
         if (splashDamageImage != null)
         {
@@ -144,16 +164,19 @@ public class PlayerScript : MonoBehaviour
 
         // Store initial position as valid
         lastValidPosition = transform.position;
-        
+
         // Initialize rock rotation
         if (crossRockGO != null)
         {
-            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
+                rockPushInitialAngle
+            );
         }
-        if(drinkButton != null)
+        if (drinkButton != null)
         {
             drinkButton.interactable = false; // Disable drink button at start
-        }else
+        }
+        else
         {
             Debug.LogWarning("Drink button reference is missing!");
         }
@@ -228,9 +251,11 @@ public class PlayerScript : MonoBehaviour
             DisableAllMovements();
         }
 
-       if (isRotatingRock  == false && crossRockGO != null)
+        if (isRotatingRock == false && crossRockGO != null)
         {
-            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
+                rockPushInitialAngle
+            );
         }
     }
 
@@ -261,10 +286,10 @@ public class PlayerScript : MonoBehaviour
         // Lerp between initial and final rotation
         Quaternion initialRot = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
         Quaternion targetRot = UnityEngine.Quaternion.Euler(rockPushAngle);
-        
+
         crossRockGO.transform.localRotation = UnityEngine.Quaternion.Lerp(
-            initialRot, 
-            targetRot, 
+            initialRot,
+            targetRot,
             rockRotationProgress
         );
     }
@@ -292,7 +317,82 @@ public class PlayerScript : MonoBehaviour
         isCasting = false;
         isDrinking = false;
         isPulling = false;
+        isSleeping = false;
         pullAnimationComplete = false;
+    }
+
+    public void StartSleeping(float duration)
+    {
+        if (!isSleeping && !isDrinking && !isCasting && !isGliding && !isPulling)
+        {
+            StartCoroutine(SleepRoutine(duration));
+        }
+    }
+
+    /// <summary>
+    /// Sleep coroutine - handles the sleep animation and duration
+    /// </summary>
+    private IEnumerator SleepRoutine(float duration)
+    {
+        isSleeping = true;
+        isMoving = false;
+
+        // Set animator bool
+        if (animator != null)
+        {
+            animator.SetBool(IS_SLEEPING, true);
+        }
+
+        // Apply sleep offset to position - remains active during entire sleep
+        transform.position += sleepOffset;
+        rb.isKinematic = true;
+        
+
+        // Optional: Disable cross during sleep
+        if (crossReferrence != null)
+        {
+            crossReferrence.SetActive(false);
+        }
+
+        Debug.Log($"Player is sleeping for {duration} seconds...");
+
+        // Wait for sleep duration
+        yield return new WaitForSeconds(duration);
+
+        // End sleep
+        StopSleeping();
+    }
+
+    /// <summary>
+    /// Stop sleeping and return to normal state
+    /// </summary>
+    public void StopSleeping()
+    {
+        isSleeping = false;
+
+        if (animator != null)
+        {
+            animator.SetBool(IS_SLEEPING, false);
+        }
+
+        // Remove sleep offset when waking up
+        transform.position -= sleepOffset;
+        rb.isKinematic = false;
+
+        // Re-enable cross
+        if (crossReferrence != null)
+        {
+            crossReferrence.SetActive(true);
+        }
+
+        Debug.Log("Player woke up!");
+    }
+
+    public void AnimationEvent_EndSleeping()
+    {
+        // This would be called from the animation if you want precise control
+        Debug.Log("Sleep animation ended via Animation Event");
+        // You can add additional logic here if needed
     }
 
     public void OnCastButtonDown()
@@ -321,6 +421,7 @@ public class PlayerScript : MonoBehaviour
             && !isDrinking
             && !isCasting
             && !isGliding
+            && !isSleeping // ADD THIS LINE
             && Mathf.Abs(horizontalInput) > 0.01f;
     }
 
@@ -359,6 +460,23 @@ public class PlayerScript : MonoBehaviour
         }
     }
 
+    // PUBLIC METHOD FOR DRINK BUTTON - Call this from UI button Event Trigger (Pointer Down)
+    public void OnDrinkButtonDown()
+    {
+        if (
+            isNearWaterFountain
+            && !isDrinking
+            && !isCasting
+            && !isBreathing
+            && !isGliding
+            && !isPulling
+        )
+        {
+            StartDrinking();
+            Debug.Log("Drink button pressed - Starting drinking");
+        }
+    }
+
     void StartCasting()
     {
         isCasting = true;
@@ -387,6 +505,13 @@ public class PlayerScript : MonoBehaviour
                 return;
             }
 
+            // Check if blocked by FastStop
+            if (isBlockedByFastStop && IsBlockedByFastStopDirection(horizontalInput))
+            {
+                // Block movement in the blocked direction
+                return;
+            }
+
             // Store position before moving (for potential rollback)
             lastValidPosition = transform.position;
 
@@ -407,6 +532,59 @@ public class PlayerScript : MonoBehaviour
         // If moving closer to the rock (distance decreasing), block movement
         // We use sqrMagnitude for performance (avoids sqrt calculation)
         return intendedToRock.sqrMagnitude < currentToRock.sqrMagnitude;
+    }
+
+    /// <summary>
+    /// Determines if movement direction is blocked by FastStop
+    /// </summary>
+    private bool IsBlockedByFastStopDirection(float input)
+    {
+        // Block left movement (negative input)
+        if (input < 0 && fastStopBlockLeft)
+        {
+            Debug.Log("Movement blocked: FastStop blocking LEFT direction");
+            return true;
+        }
+
+        // Block right movement (positive input)
+        if (input > 0 && fastStopBlockRight)
+        {
+            Debug.Log("Movement blocked: FastStop blocking RIGHT direction");
+            return true;
+        }
+
+        return false;
+    }
+
+    // PUBLIC METHODS FOR FASTSTOP TRIGGER
+
+    public void OnFastStopTriggerEnter(Vector3 stopPosition, bool blockLeft, bool blockRight)
+    {
+        isBlockedByFastStop = true;
+        fastStopPosition = stopPosition;
+        fastStopBlockLeft = blockLeft;
+        fastStopBlockRight = blockRight;
+
+        string blockedDirections = "";
+        if (blockLeft && blockRight)
+            blockedDirections = "BOTH directions";
+        else if (blockLeft)
+            blockedDirections = "LEFT direction";
+        else if (blockRight)
+            blockedDirections = "RIGHT direction";
+        else
+            blockedDirections = "NO directions (FastStop inactive)";
+
+        Debug.Log($"Entered FastStop zone - Blocking: {blockedDirections}");
+    }
+
+    public void OnFastStopTriggerExit()
+    {
+        isBlockedByFastStop = false;
+        fastStopBlockLeft = false;
+        fastStopBlockRight = false;
+
+        Debug.Log("Exited FastStop zone - can move freely in all directions");
     }
 
     void HandleRotation()
@@ -445,7 +623,7 @@ public class PlayerScript : MonoBehaviour
         if (walkRig == null || armRig == null || glideRig == null)
             return;
 
-        if (isBreathing || isDrinking || isCasting || isGliding || isPulling) // Add isPulling
+        if (isBreathing || isDrinking || isCasting || isGliding || isPulling || isSleeping) // Add isSleeping
         {
             targetRigWeight = 0f;
         }
@@ -479,6 +657,12 @@ public class PlayerScript : MonoBehaviour
             Debug.Log("Near water fountain - Press K to drink");
             canvasTrigger = other.GetComponent<CanvasTrigger>();
             canvasTrigger?.ActivateCanvas();
+
+            // Enable drink button when near water fountain
+            if (drinkButton != null)
+            {
+                drinkButton.interactable = true;
+            }
         }
     }
 
@@ -497,16 +681,16 @@ public class PlayerScript : MonoBehaviour
         canPull = false;
         isPulling = false;
         pullAnimationComplete = false;
-        
+
         // UPDATED: Reset rock rotation and crosses
         ResetRockRotation();
-        
+
         // Ensure proper cross is active
         if (crossRockGO != null && crossRockGO.activeInHierarchy)
         {
             crossRockGO.SetActive(false);
         }
-        
+
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
         {
             crossReferrence.SetActive(true);
@@ -521,16 +705,16 @@ public class PlayerScript : MonoBehaviour
         canPull = false;
         isPulling = false;
         pullAnimationComplete = false;
-        
+
         // UPDATED: Reset rock rotation and crosses
         ResetRockRotation();
-        
+
         // Ensure proper cross is active
         if (crossRockGO != null && crossRockGO.activeInHierarchy)
         {
             crossRockGO.SetActive(false);
         }
-        
+
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
         {
             crossReferrence.SetActive(true);
@@ -556,7 +740,7 @@ public class PlayerScript : MonoBehaviour
             {
                 crossRockGO.SetActive(true);
                 crossReferrence.SetActive(false);
-                
+
                 // UPDATED: Start rotating the rock
                 // StartRockRotation(); - do not uncomment this line, it works as expected
             }
@@ -608,10 +792,12 @@ public class PlayerScript : MonoBehaviour
         Debug.Log("Resetting rock rotation");
         isRotatingRock = false;
         rockRotationProgress = 0f;
-        
+
         if (crossRockGO != null)
         {
-            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
+                rockPushInitialAngle
+            );
         }
     }
 
@@ -626,21 +812,21 @@ public class PlayerScript : MonoBehaviour
     public void AnimationEvent_EndPulling()
     {
         isPulling = false;
-        
+
         // UPDATED: Snap rock back to initial rotation and swap crosses
         ResetRockRotation();
-        
+
         // Deactivate rock cross and reactivate normal cross
         if (crossRockGO != null && crossRockGO.activeInHierarchy)
         {
             crossRockGO.SetActive(false);
         }
-        
+
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
         {
             crossReferrence.SetActive(true);
         }
-        
+
         Debug.Log("Pull animation ended");
     }
 
@@ -666,6 +852,12 @@ public class PlayerScript : MonoBehaviour
             isNearWaterFountain = false;
             currentWaterFountain = null;
             Debug.Log("Left water fountain area");
+
+            // Disable drink button when leaving water fountain
+            if (drinkButton != null)
+            {
+                drinkButton.interactable = false;
+            }
         }
     }
 
@@ -754,6 +946,12 @@ public class PlayerScript : MonoBehaviour
         canvasTrigger.DeactivateCanvas();
         currentWaterAmount = 0;
         canvasTrigger = null;
+
+        // Disable drink button after completing
+        if (drinkButton != null)
+        {
+            drinkButton.interactable = false;
+        }
     }
 
     private void OnDrinkingBenefits()

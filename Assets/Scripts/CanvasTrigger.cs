@@ -29,6 +29,7 @@ public class CanvasTrigger : MonoBehaviour
         {
             waterCanvas.SetActive(true);
         }
+        this.gameObject.SetActive(true);
     }
 
     public void DeactivateCanvas()
@@ -39,6 +40,7 @@ public class CanvasTrigger : MonoBehaviour
               
             waterCanvas.SetActive(false);
         }
+        this.gameObject.SetActive(false);
     }
 
   
