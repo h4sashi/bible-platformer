@@ -8,6 +8,7 @@ TagManager:
   - Cross
   - TriggerObstacle
   - SleepTrigger
+  - Bread
   layers:
   - Default
   - TransparentFX

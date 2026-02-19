@@ -24,11 +24,9 @@ public class PlayerScript : MonoBehaviour
     private Animator animator;
 
     [Header("Animation Rigging")]
-    [SerializeField]
-    private Rig walkRig;
+    public  Rig walkRig;
 
-    [SerializeField]
-    private Rig armRig;
+    public Rig armRig;
 
     public Rig glideRig;
 
@@ -50,7 +48,7 @@ public class PlayerScript : MonoBehaviour
     private bool isBreathing;
     private Vector3 moveDirection;
 
-    private float targetRigWeight;
+    public float targetRigWeight;
 
     public GameObject crossReferrence;
     private BoxCollider crossCol;

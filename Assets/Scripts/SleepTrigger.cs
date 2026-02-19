@@ -101,6 +101,9 @@ public class SleepTrigger : MonoBehaviour
         // Disable collider so this never triggers again
         Collider col = GetComponent<Collider>();
         if (col != null) col.enabled = false;
+
+        PostSleepPlayerScript postSleepPlayerScript = GameObject.FindGameObjectWithTag("Player").GetComponent<PostSleepPlayerScript>();
+        postSleepPlayerScript.Activate();
     }
 
     // Called by RavenScript when crow reaches its target
@@ -125,6 +128,7 @@ public class SleepTrigger : MonoBehaviour
 
             if (sleepPromptUI != null) sleepPromptUI.SetActive(true);
             if (crow != null) crow.SetActive(true);
+            if(crowCross != null) crowCross.SetActive(true);
         }
     }
 
