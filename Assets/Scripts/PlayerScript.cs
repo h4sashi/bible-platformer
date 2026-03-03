@@ -14,7 +14,7 @@ public class PlayerScript : MonoBehaviour
     private Rigidbody rb;
 
     [Header("UI Buttons")]
-    public Button drinkButton; // Reference to the UI button for actions (e.g., drink)
+    public Button drinkButton;
 
     [SerializeField]
     private float smoothRotation = 10f;
@@ -24,11 +24,10 @@ public class PlayerScript : MonoBehaviour
     private Animator animator;
 
     [Header("Animation Rigging")]
-    public  Rig walkRig;
-
+    public Rig walkRig;
     public Rig armRig;
-
     public Rig glideRig;
+    public Rig armPluckRig;
 
     [SerializeField]
     private float rigTransitionSpeed = 5f;
@@ -42,10 +41,9 @@ public class PlayerScript : MonoBehaviour
     private bool isDrinking;
 
     public bool isCasting;
-
     public bool isGliding;
-
     private bool isBreathing;
+
     private Vector3 moveDirection;
 
     public float targetRigWeight;
@@ -94,7 +92,6 @@ public class PlayerScript : MonoBehaviour
     [Header("Player Health Settings")]
     [HideInInspector]
     public int maxHealth = 100;
-
     public int currentHealth;
     public Image splashDamageImage;
     public float flashDuration = 0.5f;
@@ -102,9 +99,8 @@ public class PlayerScript : MonoBehaviour
 
     [Header("Player Attack Settings")]
     public SphereCollider crossHitCol;
-
-    public LayerMask enemyLayer; // Layer mask to identify enemies
-    public float damageAmount = 25f; // Damage to apply to enemies
+    public LayerMask enemyLayer;
+    public float damageAmount = 25f;
 
     [Header("Mobile Controls")]
     [SerializeField]
@@ -114,7 +110,6 @@ public class PlayerScript : MonoBehaviour
 
     [Header("Pull Settings")]
     private const string PULL_TRIGGER = "Pull";
-
     private bool isPulling;
     private bool canPull;
     private bool pullAnimationComplete = false;
@@ -123,7 +118,6 @@ public class PlayerScript : MonoBehaviour
     {
         get { return isPulling; }
     }
-
     public bool IsPullAnimationComplete
     {
         get { return pullAnimationComplete; }
@@ -133,20 +127,21 @@ public class PlayerScript : MonoBehaviour
     public Vector3 sleepOffset;
     private bool isSleeping;
     private const string IS_SLEEPING = "isSleeping";
-
     public bool IsSleeping
     {
         get { return isSleeping; }
     }
-    
 
     [Header("Rock Settings")]
     public GameObject crossRockGO;
     public Vector3 rockPushInitialAngle;
     public Vector3 rockPushAngle;
-    public float rockRotationSpeed = 2f; // Speed of rotation lerp
+    public float rockRotationSpeed = 2f;
     private bool isRotatingRock = false;
     private float rockRotationProgress = 0f;
+
+    [Header("Pluck Settings")]
+    public PluckData pluck = new PluckData();
 
     private void Awake()
     {
@@ -156,28 +151,19 @@ public class PlayerScript : MonoBehaviour
         rb = GetComponent<Rigidbody>();
 
         if (splashDamageImage != null)
-        {
             splashDamageImage.color = Color.clear;
-        }
 
-        // Store initial position as valid
         lastValidPosition = transform.position;
 
-        // Initialize rock rotation
         if (crossRockGO != null)
-        {
             crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
                 rockPushInitialAngle
             );
-        }
+
         if (drinkButton != null)
-        {
-            drinkButton.interactable = false; // Disable drink button at start
-        }
+            drinkButton.interactable = false;
         else
-        {
             Debug.LogWarning("Drink button reference is missing!");
-        }
     }
 
     void Start()
@@ -186,34 +172,25 @@ public class PlayerScript : MonoBehaviour
         {
             animator = GetComponent<Animator>();
             if (animator == null)
-            {
                 Debug.LogWarning("No Animator component found on player!");
-            }
         }
 
         if (walkRig == null)
         {
             RigBuilder rigBuilder = GetComponent<RigBuilder>();
             if (rigBuilder != null && rigBuilder.layers.Count > 0)
-            {
                 walkRig = rigBuilder.layers[0].rig;
-            }
             else
-            {
                 Debug.LogWarning("No Rig component assigned or found!");
-            }
         }
+
         if (armRig == null)
         {
             RigBuilder rigBuilder = GetComponent<RigBuilder>();
             if (rigBuilder != null && rigBuilder.layers.Count > 0)
-            {
                 armRig = rigBuilder.layers[1].rig;
-            }
             else
-            {
                 Debug.LogWarning("No Rig component assigned or found!");
-            }
         }
 
         crossCol = crossReferrence.GetComponent<BoxCollider>();
@@ -240,8 +217,8 @@ public class PlayerScript : MonoBehaviour
         HandleRigWeight();
         HandleCastingInput();
         HandleDrinkingInput();
-        HandlePullingInput(); // Keyboard input
-        HandleRockRotation(); // NEW: Handle rock rotation lerp
+        HandlePullingInput();
+        HandleRockRotation();
 
         if (isGliding == true)
         {
@@ -255,33 +232,36 @@ public class PlayerScript : MonoBehaviour
                 rockPushInitialAngle
             );
         }
+
+        HandlePluckRigDrop();
+
+        // if (isPluckRigUp == true)
+        // {
+        //     LowArmPluckRigWeight(armPluckRig);
+        // }
+        // else
+        // {
+        //     return;
+        // }
     }
 
     void HandlePullingInput()
     {
-        // Hold P key to pull
         if (Input.GetKeyDown(KeyCode.P) && canPull)
-        {
             OnPullButtonDown();
-        }
 
         if (Input.GetKeyUp(KeyCode.P))
-        {
             OnPullButtonUp();
-        }
     }
 
-    // NEW METHOD: Handle the smooth rotation of the rock
     void HandleRockRotation()
     {
         if (!isRotatingRock || crossRockGO == null)
             return;
 
-        // Increment the lerp progress
         rockRotationProgress += Time.deltaTime * rockRotationSpeed;
         rockRotationProgress = Mathf.Clamp01(rockRotationProgress);
 
-        // Lerp between initial and final rotation
         Quaternion initialRot = UnityEngine.Quaternion.Euler(rockPushInitialAngle);
         Quaternion targetRot = UnityEngine.Quaternion.Euler(rockPushAngle);
 
@@ -292,7 +272,7 @@ public class PlayerScript : MonoBehaviour
         );
     }
 
-    // MOBILE UI CALL BACKS
+    // MOBILE UI CALLBACKS
 
     public void OnMoveLeftDown()
     {
@@ -316,81 +296,55 @@ public class PlayerScript : MonoBehaviour
         isDrinking = false;
         isPulling = false;
         isSleeping = false;
+        pluck.Reset(); // was: isPlucking = false;
         pullAnimationComplete = false;
     }
 
     public void StartSleeping(float duration)
     {
         if (!isSleeping && !isDrinking && !isCasting && !isGliding && !isPulling)
-        {
             StartCoroutine(SleepRoutine(duration));
-        }
     }
 
-    /// <summary>
-    /// Sleep coroutine - handles the sleep animation and duration
-    /// </summary>
     private IEnumerator SleepRoutine(float duration)
     {
         isSleeping = true;
         isMoving = false;
 
-        // Set animator bool
         if (animator != null)
-        {
             animator.SetBool(IS_SLEEPING, true);
-        }
 
-        // Apply sleep offset to position - remains active during entire sleep
         transform.position += sleepOffset;
         rb.isKinematic = true;
-        
 
-        // Optional: Disable cross during sleep
         if (crossReferrence != null)
-        {
             crossReferrence.SetActive(false);
-        }
 
         Debug.Log($"Player is sleeping for {duration} seconds...");
-
-        // Wait for sleep duration
         yield return new WaitForSeconds(duration);
 
-        // End sleep
         StopSleeping();
     }
 
-    /// <summary>
-    /// Stop sleeping and return to normal state
-    /// </summary>
     public void StopSleeping()
     {
         isSleeping = false;
 
         if (animator != null)
-        {
             animator.SetBool(IS_SLEEPING, false);
-        }
 
-        // Remove sleep offset when waking up
         transform.position -= sleepOffset;
         rb.isKinematic = false;
 
-        // Re-enable cross
         if (crossReferrence != null)
-        {
             crossReferrence.SetActive(true);
-        }
 
         Debug.Log("Player woke up!");
     }
 
     public void AnimationEvent_EndSleeping()
     {
-        // This would be called from the animation if you want precise control
         Debug.Log("Sleep animation ended via Animation Event");
-        // You can add additional logic here if needed
     }
 
     public void OnCastButtonDown()
@@ -406,20 +360,17 @@ public class PlayerScript : MonoBehaviour
     void GetInput()
     {
         if (useMobileControls)
-        {
             horizontalInput = mobileHorizontalInput;
-        }
         else
-        {
             horizontalInput = Input.GetAxisRaw("Horizontal");
-        }
 
         isMoving =
             !isBreathing
             && !isDrinking
             && !isCasting
             && !isGliding
-            && !isSleeping // ADD THIS LINE
+            && !isSleeping
+            && !pluck.isPlucking
             && Mathf.Abs(horizontalInput) > 0.01f;
     }
 
@@ -428,17 +379,12 @@ public class PlayerScript : MonoBehaviour
         bool castRequested = false;
 
         if (useMobileControls)
-        {
             castRequested = mobileCastPressed;
-        }
         else
-        {
             castRequested = Input.GetKeyDown(KeyCode.G);
-        }
+
         if (castRequested && !isCasting && !isBreathing && !isDrinking && !isGliding)
-        {
             StartCasting();
-        }
 
         mobileCastPressed = false;
     }
@@ -453,12 +399,9 @@ public class PlayerScript : MonoBehaviour
             && !isBreathing
             && !isGliding
         )
-        {
             StartDrinking();
-        }
     }
 
-    // PUBLIC METHOD FOR DRINK BUTTON - Call this from UI button Event Trigger (Pointer Down)
     public void OnDrinkButtonDown()
     {
         if (
@@ -496,55 +439,32 @@ public class PlayerScript : MonoBehaviour
             Vector3 intendedPosition =
                 transform.position + (moveDirection * moveSpeed * Time.deltaTime);
 
-            // Check if blocked by rock obstacle
             if (isBlockedByRock && IsMovingTowardRock(intendedPosition))
-            {
-                // Block forward movement toward rock
                 return;
-            }
 
-            // Check if blocked by FastStop
             if (isBlockedByFastStop && IsBlockedByFastStopDirection(horizontalInput))
-            {
-                // Block movement in the blocked direction
                 return;
-            }
 
-            // Store position before moving (for potential rollback)
             lastValidPosition = transform.position;
-
-            // Apply movement
             transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
         }
     }
 
-    /// <summary>
-    /// Determines if the intended movement is toward the rock obstacle
-    /// </summary>
     private bool IsMovingTowardRock(Vector3 intendedPosition)
     {
-        // Calculate direction vectors
         Vector3 currentToRock = rockObstaclePosition - transform.position;
         Vector3 intendedToRock = rockObstaclePosition - intendedPosition;
-
-        // If moving closer to the rock (distance decreasing), block movement
-        // We use sqrMagnitude for performance (avoids sqrt calculation)
         return intendedToRock.sqrMagnitude < currentToRock.sqrMagnitude;
     }
 
-    /// <summary>
-    /// Determines if movement direction is blocked by FastStop
-    /// </summary>
     private bool IsBlockedByFastStopDirection(float input)
     {
-        // Block left movement (negative input)
         if (input < 0 && fastStopBlockLeft)
         {
             Debug.Log("Movement blocked: FastStop blocking LEFT direction");
             return true;
         }
 
-        // Block right movement (positive input)
         if (input > 0 && fastStopBlockRight)
         {
             Debug.Log("Movement blocked: FastStop blocking RIGHT direction");
@@ -553,8 +473,6 @@ public class PlayerScript : MonoBehaviour
 
         return false;
     }
-
-    // PUBLIC METHODS FOR FASTSTOP TRIGGER
 
     public void OnFastStopTriggerEnter(Vector3 stopPosition, bool blockLeft, bool blockRight)
     {
@@ -581,7 +499,6 @@ public class PlayerScript : MonoBehaviour
         isBlockedByFastStop = false;
         fastStopBlockLeft = false;
         fastStopBlockRight = false;
-
         Debug.Log("Exited FastStop zone - can move freely in all directions");
     }
 
@@ -592,13 +509,9 @@ public class PlayerScript : MonoBehaviour
             Quaternion targetRotation;
 
             if (horizontalInput < 0)
-            {
                 targetRotation = UnityEngine.Quaternion.Euler(0, 180, 0);
-            }
             else
-            {
                 targetRotation = UnityEngine.Quaternion.Euler(0, 0, 0);
-            }
 
             transform.rotation = UnityEngine.Quaternion.Lerp(
                 transform.rotation,
@@ -611,9 +524,7 @@ public class PlayerScript : MonoBehaviour
     void HandleAnimation()
     {
         if (animator != null)
-        {
             animator.SetBool(IS_MOVING, isMoving);
-        }
     }
 
     void HandleRigWeight()
@@ -621,21 +532,25 @@ public class PlayerScript : MonoBehaviour
         if (walkRig == null || armRig == null || glideRig == null)
             return;
 
-        if (isBreathing || isDrinking || isCasting || isGliding || isPulling || isSleeping) // Add isSleeping
-        {
+        // When plucking, walkRig and armRig are suppressed; armPluckRig is handled by PluckZone coroutine
+        if (
+            isBreathing
+            || isDrinking
+            || isCasting
+            || isGliding
+            || isPulling
+            || isSleeping
+            || pluck.isPlucking
+        )
             targetRigWeight = 0f;
-        }
         else
-        {
             targetRigWeight = 1f;
-        }
 
         walkRig.weight = Mathf.Lerp(
             walkRig.weight,
             targetRigWeight,
             Time.deltaTime * rigTransitionSpeed
         );
-
         armRig.weight = Mathf.Lerp(
             armRig.weight,
             targetRigWeight,
@@ -648,7 +563,7 @@ public class PlayerScript : MonoBehaviour
         if (!other.CompareTag("ActionTrigger"))
             return;
 
-        if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
+        if (other.name == "Water Fountain")
         {
             isNearWaterFountain = true;
             currentWaterFountain = other.gameObject;
@@ -656,20 +571,121 @@ public class PlayerScript : MonoBehaviour
             canvasTrigger = other.GetComponent<CanvasTrigger>();
             canvasTrigger?.ActivateCanvas();
 
-            // Enable drink button when near water fountain
             if (drinkButton != null)
-            {
                 drinkButton.interactable = true;
+        }
+        // Tree Zone is now fully handled by PluckZone.cs
+    }
+
+    // =====================
+    // PLUCK ZONE INTERFACE
+    // =====================
+
+    /// <summary>
+    /// Called by PluckZone when the player enters or exits the zone.
+    /// </summary>
+    public void SetInPluckZone(bool inZone, PluckZone zone)
+    {
+        pluck.isInPluckZone = inZone;
+        pluck.currentPluckZone = zone;
+
+        if (!inZone)
+        {
+            pluck.ExitZone();
+            if (animator != null)
+                animator.SetBool(PluckData.IS_PLUCK, false);
+            if (armPluckRig != null)
+                armPluckRig.weight = 0f;
+        }
+    }
+
+    /// <summary>
+    /// Called from the UI Pluck Button (Pointer Down).
+    /// Starts the looping pluck animation and triggers rig weight rise/fall.
+    /// </summary>
+    public void OnPluckButtonDown()
+    {
+        if (
+            !pluck.isInPluckZone
+            || isDrinking
+            || isCasting
+            || isGliding
+            || isPulling
+            || isSleeping
+            || isBreathing
+        )
+            return;
+
+        crossReferrence.transform.localPosition = pluck.crossPluckOffset;
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+            pluck.crossPluckRotationOffset
+        );
+
+        pluck.isPlucking = true;
+        pluck.isPluckRigUp = false;
+        isMoving = false;
+
+        if (animator != null)
+            animator.SetBool(PluckData.IS_PLUCK, true);
+
+        StartCoroutine(PluckRigRoutine());
+        Debug.Log("Pluck button pressed");
+    }
+
+    private IEnumerator PluckRigRoutine()
+    {
+        armPluckRig.weight = 1f;
+        yield return null; // one frame to register
+        pluck.isPluckRigUp = true; // hand off to Update()
+    }
+
+    void HandlePluckRigDrop()
+    {
+        if (!pluck.isPluckRigUp || armPluckRig == null)
+            return;
+
+        if (pluck.hitScore >= pluck.maxHitScore)
+        {
+            Debug.Log("Hit Score has been reached at " + pluck.hitScore);
+            Debug.Log("Drop fruits");
+        }
+        else
+        {
+            armPluckRig.weight = Mathf.Lerp(
+                armPluckRig.weight,
+                0f,
+                Time.deltaTime * pluck.rigFallSpeed
+            );
+
+            if (armPluckRig.weight <= 0.01f)
+            {
+                armPluckRig.weight = 0f;
+                pluck.isPluckRigUp = false;
+                pluck.isPlucking = false;
+
+                pluck.hitScore++;
+
+                // if (animator != null)
+                //     animator.SetBool(PluckData.IS_PLUCK, false);
+
+                Debug.Log("Pluck cycle complete - ready for next press");
+                // crossReferrence.transform.localPosition = initialTransformCrossOffset;
+                // crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+                //     initialRotationCrossOffset
+                // );
             }
         }
     }
+
+    // =====================
+    // ROCK / PULL METHODS
+    // =====================
 
     public void OnRockObstacleTriggerEnter(Vector3 rockPosition)
     {
         isBlockedByRock = true;
         rockObstaclePosition = rockPosition;
-        canPull = true; // Enable pulling
-
+        canPull = true;
         Debug.Log("Near rock obstacle - Can now pull");
     }
 
@@ -680,19 +696,13 @@ public class PlayerScript : MonoBehaviour
         isPulling = false;
         pullAnimationComplete = false;
 
-        // UPDATED: Reset rock rotation and crosses
         ResetRockRotation();
 
-        // Ensure proper cross is active
         if (crossRockGO != null && crossRockGO.activeInHierarchy)
-        {
             crossRockGO.SetActive(false);
-        }
 
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
-        {
             crossReferrence.SetActive(true);
-        }
 
         Debug.Log("Exited rock obstacle area - can move freely");
     }
@@ -704,43 +714,31 @@ public class PlayerScript : MonoBehaviour
         isPulling = false;
         pullAnimationComplete = false;
 
-        // UPDATED: Reset rock rotation and crosses
         ResetRockRotation();
 
-        // Ensure proper cross is active
         if (crossRockGO != null && crossRockGO.activeInHierarchy)
-        {
             crossRockGO.SetActive(false);
-        }
 
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
-        {
             crossReferrence.SetActive(true);
-        }
 
         Debug.Log("Rock obstacle cleared - Pull animation stopped");
     }
-
-    // PUBLIC METHOD FOR PULL BUTTON - Call this from UI button or input
 
     public void OnPullButtonDown()
     {
         if (canPull && !isDrinking && !isCasting && !isGliding && !isBreathing)
         {
-            // Allow re-triggering by resetting isPulling immediately
             isPulling = true;
             isMoving = false;
             pullAnimationComplete = false;
 
-            // Trigger the pull animation
             animator.SetTrigger(PULL_TRIGGER);
+
             if (crossRockGO.activeInHierarchy == false)
             {
                 crossRockGO.SetActive(true);
                 crossReferrence.SetActive(false);
-
-                // UPDATED: Start rotating the rock
-                // StartRockRotation(); - do not uncomment this line, it works as expected
             }
             else
             {
@@ -759,32 +757,24 @@ public class PlayerScript : MonoBehaviour
     public void OnPullButtonPressed()
     {
         if (canPull && !isPulling && !isDrinking && !isCasting && !isGliding && !isBreathing)
-        {
             StartPulling();
-        }
     }
 
-    void HandlePulling()
-    {
-        // Method kept for compatibility but no longer used
-    }
+    void HandlePulling() { }
 
     void StartPulling()
     {
         isPulling = true;
         isMoving = false;
-
         Debug.Log("Started pulling");
     }
 
-    // NEW METHOD: Start the rock rotation
     private void StartRockRotation()
     {
         isRotatingRock = true;
         rockRotationProgress = 0f;
     }
 
-    // NEW METHOD: Reset rock rotation instantly
     public void ResetRockRotation()
     {
         Debug.Log("Resetting rock rotation");
@@ -792,38 +782,27 @@ public class PlayerScript : MonoBehaviour
         rockRotationProgress = 0f;
 
         if (crossRockGO != null)
-        {
             crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
                 rockPushInitialAngle
             );
-        }
     }
 
-    // Animation Event at the peak of Pull animation
     public void AnimationEvent_PullHit()
     {
         pullAnimationComplete = true;
         Debug.Log("Pull hit!");
     }
 
-    // Animation Event at the end of Pull animation
     public void AnimationEvent_EndPulling()
     {
         isPulling = false;
-
-        // UPDATED: Snap rock back to initial rotation and swap crosses
         ResetRockRotation();
 
-        // Deactivate rock cross and reactivate normal cross
         if (crossRockGO != null && crossRockGO.activeInHierarchy)
-        {
             crossRockGO.SetActive(false);
-        }
 
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
-        {
             crossReferrence.SetActive(true);
-        }
 
         Debug.Log("Pull animation ended");
     }
@@ -832,6 +811,10 @@ public class PlayerScript : MonoBehaviour
     {
         pullAnimationComplete = false;
     }
+
+    // =====================
+    // GLIDING
+    // =====================
 
     public void GlideZoneOnTrigger(CameraTrigger ct)
     {
@@ -851,11 +834,8 @@ public class PlayerScript : MonoBehaviour
             currentWaterFountain = null;
             Debug.Log("Left water fountain area");
 
-            // Disable drink button when leaving water fountain
             if (drinkButton != null)
-            {
                 drinkButton.interactable = false;
-            }
         }
     }
 
@@ -884,6 +864,10 @@ public class PlayerScript : MonoBehaviour
         glideRig.weight = 1;
     }
 
+    // =====================
+    // DRINKING
+    // =====================
+
     void StartDrinking()
     {
         isDrinking = true;
@@ -891,7 +875,6 @@ public class PlayerScript : MonoBehaviour
         isMoving = false;
         crossReferrence.SetActive(false);
         cupGO.SetActive(true);
-
         Debug.Log("Started drinking water");
     }
 
@@ -902,8 +885,6 @@ public class PlayerScript : MonoBehaviour
         crossReferrence.SetActive(true);
         cupGO.SetActive(false);
     }
-
-    // == ANIMATION EVENTS ==
 
     public void AnimationEvent_EndDrinking()
     {
@@ -945,17 +926,18 @@ public class PlayerScript : MonoBehaviour
         currentWaterAmount = 0;
         canvasTrigger = null;
 
-        // Disable drink button after completing
         if (drinkButton != null)
-        {
             drinkButton.interactable = false;
-        }
     }
 
     private void OnDrinkingBenefits()
     {
         Debug.Log("Player received drinking benefits!");
     }
+
+    // =====================
+    // CASTING ANIMATION EVENTS
+    // =====================
 
     public void AnimationEvent_StartCasting()
     {
@@ -972,7 +954,6 @@ public class PlayerScript : MonoBehaviour
 
     public void AnimationEvent_EndCasting()
     {
-        // Check for enemies in hitPoint's radius and apply damage
         CheckAndDamageEnemies();
 
         crossCol.enabled = false;
@@ -985,7 +966,6 @@ public class PlayerScript : MonoBehaviour
         );
     }
 
-    // Check for enemies within hitPoint collider and apply damage
     private void CheckAndDamageEnemies()
     {
         if (crossHitCol == null)
@@ -994,10 +974,9 @@ public class PlayerScript : MonoBehaviour
             return;
         }
 
-        // Get all colliders overlapping with the crossHitCol sphere
         Collider[] hitColliders = Physics.OverlapSphere(
             crossHitCol.transform.position,
-            crossHitCol.radius * crossHitCol.transform.lossyScale.x, // Account for scale
+            crossHitCol.radius * crossHitCol.transform.lossyScale.x,
             enemyLayer
         );
 
@@ -1007,7 +986,6 @@ public class PlayerScript : MonoBehaviour
 
             foreach (Collider enemyCollider in hitColliders)
             {
-                // Try to get a damage interface or component from the enemy
                 IDamageable damageable = enemyCollider.GetComponent<IDamageable>();
 
                 if (damageable != null)
@@ -1017,8 +995,6 @@ public class PlayerScript : MonoBehaviour
                 }
                 else
                 {
-                    // Alternative: if enemies use a different damage method
-                    // Try to find EnemyHealth or similar component
                     var enemyHealth = enemyCollider.GetComponent<WolfFSM>();
                     if (enemyHealth != null)
                     {
@@ -1042,7 +1018,10 @@ public class PlayerScript : MonoBehaviour
         }
     }
 
-    // DAMAGE SYSTEM - Splash effect directly in OnDamagedTaken
+    // =====================
+    // DAMAGE SYSTEM
+    // =====================
+
     public void OnDamagedTaken(float damage)
     {
         currentHealth -= (int)damage;
@@ -1052,52 +1031,37 @@ public class PlayerScript : MonoBehaviour
 
         Debug.Log($"Player took {damage} damage. Current health: {currentHealth}/{maxHealth}");
 
-        // Immediately show damage splash effect
         if (splashDamageImage != null)
         {
-            StopAllCoroutines(); // Stop any existing fade coroutines
+            StopAllCoroutines();
             StartCoroutine(DamageFlashEffect());
         }
 
         if (currentHealth == 0)
-        {
             OnPlayerDeath();
-        }
     }
 
-    // Damage flash effect coroutine - runs immediately when damage is taken
     private IEnumerator DamageFlashEffect()
     {
-        // Instant flash to full color
         splashDamageImage.color = flashColor;
 
         float elapsedTime = 0f;
 
-        // Fade out over flashDuration
         while (elapsedTime < flashDuration)
         {
             elapsedTime += Time.deltaTime;
-
-            // Calculate how far through the fade we are (0 to 1)
             float fadeProgress = elapsedTime / flashDuration;
-
-            // Smoothly interpolate alpha from flashColor.a to 0
             float alpha = Mathf.Lerp(flashColor.a, 0f, fadeProgress);
-
-            // Apply the fading color
             splashDamageImage.color = new Color(flashColor.r, flashColor.g, flashColor.b, alpha);
-
-            yield return null; // Wait one frame
+            yield return null;
         }
 
-        // Ensure it ends completely transparent
         splashDamageImage.color = Color.clear;
     }
 
     void OnPlayerDeath()
     {
         Debug.Log("Player has died.");
-        // Implement death behavior (e.g., respawn, game over screen, etc.)
     }
 }
 
@@ -1105,4 +1069,36 @@ public class PlayerScript : MonoBehaviour
 public interface IDamageable
 {
     void TakeDamage(float damage);
+}
+
+[System.Serializable]
+public class PluckData
+{
+    public int hitScore;
+    public int maxHitScore = 6;
+    public bool isInPluckZone = false;
+    public bool isPlucking = false;
+    public bool isPluckRigUp = false;
+    public float rigFallSpeed = 2f;
+
+    public Vector3 crossPluckOffset;
+    public Vector3 crossPluckRotationOffset;
+
+    [HideInInspector]
+    public PluckZone currentPluckZone;
+
+    public const string IS_PLUCK = "isPluck";
+
+    public void Reset()
+    {
+        isPlucking = false;
+        isPluckRigUp = false;
+    }
+
+    public void ExitZone()
+    {
+        isInPluckZone = false;
+        currentPluckZone = null;
+        Reset();
+    }
 }

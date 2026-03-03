@@ -67,6 +67,10 @@ public class PostSleepPlayerScript : MonoBehaviour
     private bool isPickingFruit;
     private bool isActive = false;
 
+     [Header("Movement Settings")]
+     public GameObject blockade;
+
+
     // Water fountain
 
     private CanvasTrigger currentCanvasTrigger;
@@ -151,6 +155,7 @@ public class PostSleepPlayerScript : MonoBehaviour
 {
     isActive = false;
     mobileHorizontalInput = 0f;
+    blockade.SetActive(false);
 
     if (buttonPlayerCanvas != null && buttonSleepCanvas != null)
     {
