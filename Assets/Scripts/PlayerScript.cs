@@ -629,6 +629,7 @@ public class PlayerScript : MonoBehaviour
             animator.SetBool(PluckData.IS_PLUCK, true);
 
         StartCoroutine(PluckRigRoutine());
+        CameraShake.Instance.ShakeMedium();
         Debug.Log("Pluck button pressed");
     }
 
