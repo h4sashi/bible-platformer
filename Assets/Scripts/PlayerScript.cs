@@ -66,6 +66,7 @@ public class PlayerScript : MonoBehaviour
     private Vector3 fastStopPosition;
     private bool fastStopBlockLeft = false;
     private bool fastStopBlockRight = false;
+    public RigBuilder rigBuilder;
 
     // Animation parameter names
     private const string MOVE_ANIMATION = "Walk";
@@ -166,6 +167,8 @@ public class PlayerScript : MonoBehaviour
             Debug.LogWarning("Drink button reference is missing!");
     }
 
+    bool toBuildRig = false;
+
     void Start()
     {
         if (animator == null)
@@ -235,14 +238,7 @@ public class PlayerScript : MonoBehaviour
 
         HandlePluckRigDrop();
 
-        // if (isPluckRigUp == true)
-        // {
-        //     LowArmPluckRigWeight(armPluckRig);
-        // }
-        // else
-        // {
-        //     return;
-        // }
+       
     }
 
     void HandlePullingInput()
@@ -300,6 +296,11 @@ public class PlayerScript : MonoBehaviour
         pullAnimationComplete = false;
     }
 
+    //=============
+    // SLEEPING
+    //=============
+
+    #region SLEEPING
     public void StartSleeping(float duration)
     {
         if (!isSleeping && !isDrinking && !isCasting && !isGliding && !isPulling)
@@ -347,6 +348,8 @@ public class PlayerScript : MonoBehaviour
         Debug.Log("Sleep animation ended via Animation Event");
     }
 
+    #endregion
+
     public void OnCastButtonDown()
     {
         mobileCastPressed = true;
@@ -371,6 +374,7 @@ public class PlayerScript : MonoBehaviour
             && !isGliding
             && !isSleeping
             && !pluck.isPlucking
+            && !pluck.isEating
             && Mathf.Abs(horizontalInput) > 0.01f;
     }
 
@@ -577,27 +581,143 @@ public class PlayerScript : MonoBehaviour
         // Tree Zone is now fully handled by PluckZone.cs
     }
 
+    void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
+        {
+            isNearWaterFountain = false;
+            currentWaterFountain = null;
+            Debug.Log("Left water fountain area");
+
+            if (drinkButton != null)
+                drinkButton.interactable = false;
+        }
+    }
+
+    // =====================
+    // EATING
+    // =====================
+
+    #region EATING
+
+    public void OnEatButtonDown()
+    {
+        if (
+            !pluck.isEating
+            && !isDrinking
+            && !isCasting
+            && !isBreathing
+            && !isGliding
+            && !isPulling
+        )
+        {
+            StartEating();
+            Debug.Log("Eat button pressed - Starting eating");
+        }
+    }
+
+    void StartEating()
+    {
+        pluck.isEating = true;
+        animator.SetBool(IS_DRINKING, true); // reuse drink anim, or swap for a dedicated one
+        isMoving = false;
+        crossReferrence.SetActive(false);
+        if (pluck.apple != null)
+            pluck.apple.SetActive(true);
+        Debug.Log("Started eating");
+    }
+
+    public void StopEating()
+    {
+        pluck.isEating = false;
+        animator.SetBool(IS_DRINKING, false);
+        crossReferrence.SetActive(true);
+        if (pluck.apple != null)
+            pluck.apple.SetActive(false);
+    }
+
+    public void AnimationEvent_EndEating()
+    {
+        if (pluck.hasTakenFruit == true)
+        {
+            Debug.Log("Eating animation ended");
+            OnEatComplete();
+        }
+        else
+        {
+            return;
+        }
+    }
+
+    private void OnEatComplete()
+    {
+        pluck.isEating = false;
+        animator.SetBool(IS_DRINKING, false);
+        if (pluck.apple != null)
+            pluck.apple.SetActive(false);
+        crossReferrence.SetActive(true);
+
+        Debug.Log("Eating complete!");
+        
+        pluck.blockade.SetActive(false);
+
+        if (pluck.eatButton != null)
+            pluck.eatButton.gameObject.SetActive(false);
+    }
+
+    #endregion
+
+
     // =====================
     // PLUCK ZONE INTERFACE
     // =====================
 
+    #region PLUCK ZONE INTERFACE
+
     /// <summary>
     /// Called by PluckZone when the player enters or exits the zone.
     /// </summary>
-    public void SetInPluckZone(bool inZone, PluckZone zone)
-    {
-        pluck.isInPluckZone = inZone;
-        pluck.currentPluckZone = zone;
+  public void SetInPluckZone(bool inZone, PluckZone zone)
+{
+    pluck.isInPluckZone = inZone;
+    pluck.currentPluckZone = zone;
 
-        if (!inZone)
-        {
-            pluck.ExitZone();
-            if (animator != null)
-                animator.SetBool(PluckData.IS_PLUCK, false);
-            if (armPluckRig != null)
-                armPluckRig.weight = 0f;
-        }
+    if (inZone)
+    {
+        // Full reset on re-entry
+        pluck.hitScore = 0;
+        pluck.hasTakenFruit = false;
+        pluck.isPlucking = false;
+        pluck.isPluckRigUp = false;
+
+        if (armPluckRig != null)
+            armPluckRig.weight = 1f;
+
+        // Restore cross reference in case it was hidden
+        if (crossReferrence != null && !crossReferrence.activeSelf)
+            crossReferrence.SetActive(true);
+
+        // Reset cross transform to initial position
+        crossReferrence.transform.localPosition = initialTransformCrossOffset;
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
+
+        if (animator != null)
+            animator.SetBool(PluckData.IS_PLUCK, false);
+
+        InitRigBeforePluckCompletion();
     }
+    else
+    {
+        pluck.ExitZone();
+        InitRigAfterPluckCompletion();
+
+        if (animator != null)
+            animator.SetBool(PluckData.IS_PLUCK, false);
+
+        if (armPluckRig != null)
+            armPluckRig.weight = 0f;
+    }
+}
 
     /// <summary>
     /// Called from the UI Pluck Button (Pointer Down).
@@ -616,6 +736,20 @@ public class PlayerScript : MonoBehaviour
         )
             return;
 
+        pluck.hitScore++;
+
+        if (pluck.hitScore == pluck.maxHitScore)
+        {
+            FruitZone fruitZone = GameObject.FindAnyObjectByType<FruitZone>();
+
+            fruitZone.isFruitFallTrigger = true;
+            pluck.eatButton.gameObject.SetActive(true);
+            Debug.Log("Hit Score has been reached at " + pluck.hitScore);
+            Debug.Log("Drop fruits");
+            pluck.pluckButton.gameObject.SetActive(false);
+            ResetPluckAnimationStateToDefault();
+            InitRigAfterPluckCompletion();
+        }
         crossReferrence.transform.localPosition = pluck.crossPluckOffset;
         crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
             pluck.crossPluckRotationOffset
@@ -645,42 +779,73 @@ public class PlayerScript : MonoBehaviour
         if (!pluck.isPluckRigUp || armPluckRig == null)
             return;
 
-        if (pluck.hitScore >= pluck.maxHitScore)
-        {
-            Debug.Log("Hit Score has been reached at " + pluck.hitScore);
-            Debug.Log("Drop fruits");
-        }
-        else
-        {
-            armPluckRig.weight = Mathf.Lerp(
-                armPluckRig.weight,
-                0f,
-                Time.deltaTime * pluck.rigFallSpeed
-            );
+        armPluckRig.weight = Mathf.Lerp(
+            armPluckRig.weight,
+            0f,
+            Time.deltaTime * pluck.rigFallSpeed
+        );
 
-            if (armPluckRig.weight <= 0.01f)
+        if (armPluckRig.weight <= 0.01f)
+        {
+            armPluckRig.weight = 0f;
+            pluck.isPluckRigUp = false;
+            pluck.isPlucking = false;
+
+            Debug.Log("Pluck cycle complete - ready for next press");
+
+            if (pluck.hitScore == pluck.maxHitScore)
             {
-                armPluckRig.weight = 0f;
-                pluck.isPluckRigUp = false;
-                pluck.isPlucking = false;
-
-                pluck.hitScore++;
-
-                // if (animator != null)
-                //     animator.SetBool(PluckData.IS_PLUCK, false);
-
-                Debug.Log("Pluck cycle complete - ready for next press");
-                // crossReferrence.transform.localPosition = initialTransformCrossOffset;
-                // crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
-                //     initialRotationCrossOffset
-                // );
+                ResetPluckAnimationStateToDefault();
+                InitRigAfterPluckCompletion();
             }
         }
     }
 
+    private void InitRigAfterPluckCompletion()
+    {
+        rigBuilder.layers[0].active = true;
+        rigBuilder.layers[1].active = true;
+        rigBuilder.layers[2].active = true;
+        rigBuilder.layers[3].active = false;
+       
+        rigBuilder.Build();
+    }
+
+    public void InitRigBeforePluckCompletion()
+    {
+        Debug.Log("InitRigBeforePluckCompletion() is called");
+        rigBuilder.layers[0].active = false;
+        rigBuilder.layers[1].active = false;
+        rigBuilder.layers[2].active = false;
+        rigBuilder.layers[3].active = true;
+        rigBuilder.Build();
+    }
+
+    private void ResetPluckAnimationStateToDefault()
+    {
+          Debug.Log("ResetPluckAnimationStateToDefault() is called");
+        if (animator != null)
+            animator.SetBool(PluckData.IS_PLUCK, false);
+
+        crossReferrence.transform.localPosition = initialTransformCrossOffset;
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+            initialRotationCrossOffset
+        );
+    }
+
+    public void PlayerHasFruitTaken()
+    {
+        Debug.Log("Player has taken fruit");
+        pluck.hasTakenFruit = true;
+    }
+
+    #endregion
+
+
     // =====================
     // ROCK / PULL METHODS
     // =====================
+    #region ROCK / PULL METHODS
 
     public void OnRockObstacleTriggerEnter(Vector3 rockPosition)
     {
@@ -813,10 +978,13 @@ public class PlayerScript : MonoBehaviour
         pullAnimationComplete = false;
     }
 
+    #endregion
+
     // =====================
     // GLIDING
     // =====================
 
+    #region GLIDING
     public void GlideZoneOnTrigger(CameraTrigger ct)
     {
         if (!isDrinking && !isBreathing && !isCasting)
@@ -824,19 +992,6 @@ public class PlayerScript : MonoBehaviour
             StartGliding();
             ct.enableEvents?.Invoke();
             crossGliderGO.GetComponent<GlideTrigger>().IsPlayerGliding = true;
-        }
-    }
-
-    void OnTriggerExit(Collider other)
-    {
-        if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
-        {
-            isNearWaterFountain = false;
-            currentWaterFountain = null;
-            Debug.Log("Left water fountain area");
-
-            if (drinkButton != null)
-                drinkButton.interactable = false;
         }
     }
 
@@ -865,9 +1020,13 @@ public class PlayerScript : MonoBehaviour
         glideRig.weight = 1;
     }
 
+    #endregion
+
     // =====================
     // DRINKING
     // =====================
+
+    #region DRINKING
 
     void StartDrinking()
     {
@@ -936,9 +1095,13 @@ public class PlayerScript : MonoBehaviour
         Debug.Log("Player received drinking benefits!");
     }
 
+    #endregion
+
     // =====================
     // CASTING ANIMATION EVENTS
     // =====================
+
+    #region CASTING ANIMATION EVENTS
 
     public void AnimationEvent_StartCasting()
     {
@@ -1019,10 +1182,13 @@ public class PlayerScript : MonoBehaviour
         }
     }
 
+    #endregion
+
     // =====================
     // DAMAGE SYSTEM
     // =====================
 
+    #region DAMAGE SYSTEM
     public void OnDamagedTaken(float damage)
     {
         currentHealth -= (int)damage;
@@ -1064,6 +1230,8 @@ public class PlayerScript : MonoBehaviour
     {
         Debug.Log("Player has died.");
     }
+
+    #endregion
 }
 
 // Interface for damageable entities
@@ -1082,8 +1250,17 @@ public class PluckData
     public bool isPluckRigUp = false;
     public float rigFallSpeed = 2f;
 
+    public bool isEating = false;
+    public bool hasTakenFruit = false;
+
+    public Button pluckButton;
+    public Button eatButton;
+
+    public GameObject apple;
+
     public Vector3 crossPluckOffset;
     public Vector3 crossPluckRotationOffset;
+    public GameObject blockade;
 
     [HideInInspector]
     public PluckZone currentPluckZone;
