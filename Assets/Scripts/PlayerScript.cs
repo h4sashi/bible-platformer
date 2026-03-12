@@ -177,6 +177,16 @@ public class PlayerScript : MonoBehaviour
 
     void Start()
     {
+        if (crossReferrence == null)
+        {
+            Debug.LogError("Cross reference GameObject is not assigned in the inspector!");
+            return;
+        }
+        else
+        {
+            stormData.stormCross = crossReferrence;
+        }
+
         if (animator == null)
         {
             animator = GetComponent<Animator>();
@@ -1289,38 +1299,49 @@ public class PlayerScript : MonoBehaviour
         Debug.Log("Player exited sandstorm");
     }
 
-   void HandleStorm()
-{
-    if (!stormData.isInStorm) return;
-
-    bool playerIsMoving = Mathf.Abs(horizontalInput) > 0.01f;
-    animator.speed = playerIsMoving ? 1f : 0.4f; // Slow down animation when idle in storm
-
-    if (playerIsMoving)
-    {
-        stormData.idleTimer = 0f;
-        stormData.currentPushbackForce = 0f;
+    public void StandTheCross() { 
+        stormData.stormCross.transform.localPosition = stormData.stormCrossTransformOffset;
+        stormData.stormCross.transform.localRotation = UnityEngine.Quaternion.Euler(
+            stormData.stormCrossTransformRotationOffset
+        );
     }
-    else
+
+    void HandleStorm()
     {
-        stormData.idleTimer += Time.deltaTime;
+        if (!stormData.isInStorm)
+            return;
 
-        if (stormData.idleTimer >= stormData.idleTimeBeforePushback)
+        bool playerIsMoving = Mathf.Abs(horizontalInput) > 0.01f;
+        animator.speed = playerIsMoving ? 1f : 0.4f; // Slow down animation when idle in storm
+
+        if (playerIsMoving)
         {
-            stormData.currentPushbackForce = Mathf.MoveTowards(
-                stormData.currentPushbackForce,
-                stormData.maxPushbackForce,
-                stormData.pushbackAcceleration * Time.deltaTime
-            );
+            stormData.idleTimer = 0f;
+            stormData.currentPushbackForce = 0f;
+        }
+        else
+        {
+            stormData.idleTimer += Time.deltaTime;
 
-            // Just translate the player — no rotation, no animation override
-            Vector3 pushDirection = new Vector3(0, 0, stormData.pushbackDirection);
-            transform.Translate(pushDirection * stormData.currentPushbackForce * Time.deltaTime, Space.World);
+            if (stormData.idleTimer >= stormData.idleTimeBeforePushback)
+            {
+                stormData.currentPushbackForce = Mathf.MoveTowards(
+                    stormData.currentPushbackForce,
+                    stormData.maxPushbackForce,
+                    stormData.pushbackAcceleration * Time.deltaTime
+                );
 
-            Debug.Log($"Storm pushback force: {stormData.currentPushbackForce:F2}");
+                // Just translate the player — no rotation, no animation override
+                Vector3 pushDirection = new Vector3(0, 0, stormData.pushbackDirection);
+                transform.Translate(
+                    pushDirection * stormData.currentPushbackForce * Time.deltaTime,
+                    Space.World
+                );
+
+                Debug.Log($"Storm pushback force: {stormData.currentPushbackForce:F2}");
+            }
         }
     }
-}
 
     #endregion
 
@@ -1443,6 +1464,10 @@ public class StormData
     public float pushbackAcceleration = 1.5f; // how fast pushback force builds
     public float maxPushbackForce = 12f; // final blowaway velocity
     public float pushbackDirection = -1f; // -1 = left, 1 = right (storm wind direction)
+
+    [Header("Storm Cross Settings")]
+    public Vector3 stormCrossTransformOffset;
+    public Vector3 stormCrossTransformRotationOffset;
 
     [HideInInspector]
     public float currentPushbackForce = 0f;

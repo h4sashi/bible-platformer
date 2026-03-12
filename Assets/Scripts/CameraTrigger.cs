@@ -15,6 +15,8 @@ public class CameraTrigger : MonoBehaviour
         OasisExit,
         SandStormEnter,
         SandStormExit,
+
+        SandStormRockEnter,
     }
 
     public TriggerType triggerType;
@@ -154,5 +156,25 @@ public class CameraTrigger : MonoBehaviour
         {
             enableEvents?.Invoke();
         }
+
+         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
+        {
+            enableEvents?.Invoke();
+        }
     }
+
+
+    void OnTriggerExit(Collider other)
+    {
+         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
+        {
+            disableEvents?.Invoke();
+        }
+    }
+
+
+
+
+
+
 }
