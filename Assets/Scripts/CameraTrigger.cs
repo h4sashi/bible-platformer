@@ -11,6 +11,10 @@ public class CameraTrigger : MonoBehaviour
         GlideZoneOff,
         WaterFountain,
         RockObstacle,
+        OasisEnter,
+        OasisExit,
+        SandStormEnter,
+        SandStormExit,
     }
 
     public TriggerType triggerType;
@@ -25,6 +29,68 @@ public class CameraTrigger : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
+        if (other.CompareTag("Player") && triggerType == TriggerType.OasisEnter)
+        {
+            Debug.Log("Player has enetered Oasis Zone");
+
+            enableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+
+            other.GetComponent<PlayerScript>().glideRig.weight = 0;
+            other.GetComponent<PlayerScript>().OasisZoneOnTrigger(this);
+            if (objectToEnable != null)
+            {
+                objectToEnable.SetActive(true);
+            }
+            else
+            {
+                return;
+            }
+            if (objectToDisable != null)
+            {
+                objectToDisable.SetActive(false);
+            }
+            else
+            {
+                return;
+            }
+            // objectToEnable.SetActive(true);
+        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.OasisExit)
+        {
+            Debug.Log("Player has exit Oasis Zone");
+
+            enableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(false);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(true);
+
+            other.GetComponent<PlayerScript>().glideRig.weight = 0;
+            other.GetComponent<PlayerScript>().OasisZoneOnExitTrigger(this);
+            if (objectToEnable != null)
+            {
+                objectToEnable.SetActive(false);
+            }
+            else
+            {
+                return;
+            }
+            if (objectToDisable != null)
+            {
+                objectToDisable.SetActive(true);
+            }
+            else
+            {
+                return;
+            }
+            // objectToEnable.SetActive(true);
+        }
+
         if (other.CompareTag("Player") && triggerType == TriggerType.GlideZoneOn)
         {
             Debug.Log("Player has enetered Glide Zone");
@@ -63,12 +129,30 @@ public class CameraTrigger : MonoBehaviour
             other.GetComponent<PlayerScript>().StopGliding();
         }
 
-        // if (other.CompareTag("Player") && triggerType == TriggerType.RockObstacle)
-        // {
-        //     Debug.Log("Player has entered Rock Obstacle Zone");
-        //     other.GetComponent<PlayerScript>().OnRockObstacleTriggerEnter(transform.position);
-        // }
-    }
+        if (other.CompareTag("Player") && triggerType == TriggerType.SandStormEnter)
+        {
+            Debug.Log("Player entered sandstorm zone");
+            enableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            other.GetComponent<PlayerScript>().EnterSandStorm();
+        }
 
-   
+        if (other.CompareTag("Player") && triggerType == TriggerType.SandStormExit)
+        {
+            Debug.Log("Player exited sandstorm zone");
+            disableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(false);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(true);
+            other.GetComponent<PlayerScript>().ExitSandStorm();
+        }
+        if (other.CompareTag("Player") && triggerType == TriggerType.SandStormEnter)
+        {
+            enableEvents?.Invoke();
+        }
+    }
 }

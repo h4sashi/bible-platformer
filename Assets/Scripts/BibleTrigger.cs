@@ -3,15 +3,20 @@ using System.Collections;
 using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Events;
 
 public class BibleTrigger : MonoBehaviour
 {
-     public enum TriggerType{ GlideZoneOn, GlideZoneOff, WaterFountain, RockObstacle}
-   
+    public enum TriggerType
+    {
+        GlideZoneOn,
+        GlideZoneOff,
+        WaterFountain,
+        RockObstacle,
+    }
 
     public TriggerType triggerType;
 
-    
     [TextArea]
     public string verse;
 
@@ -25,7 +30,11 @@ public class BibleTrigger : MonoBehaviour
 
     public event Action OnTypingFinishEvent;
 
-    private void OnEnable() {
+    public UnityEvent enableEvents;
+    public UnityEvent disableEvents;
+
+    private void OnEnable()
+    {
         OnTypingFinishEvent += DisableUI;
     }
 
@@ -56,6 +65,12 @@ public class BibleTrigger : MonoBehaviour
             StopCoroutine(typingRoutine);
 
         typingRoutine = StartCoroutine(TypeVerse());
+
+        if (triggerType == TriggerType.GlideZoneOn)
+        {
+            enableEvents?.Invoke();
+            disableEvents?.Invoke();
+        }
     }
 
     IEnumerator TypeVerse()

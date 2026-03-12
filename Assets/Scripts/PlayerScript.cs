@@ -144,6 +144,12 @@ public class PlayerScript : MonoBehaviour
     [Header("Pluck Settings")]
     public PluckData pluck = new PluckData();
 
+    [Header("Sail Settings")]
+    public SailData sailData = new SailData();
+
+    [Header("Storm Settings")]
+    public StormData stormData = new StormData();
+
     private void Awake()
     {
         glideRig.weight = 0;
@@ -222,8 +228,15 @@ public class PlayerScript : MonoBehaviour
         HandleDrinkingInput();
         HandlePullingInput();
         HandleRockRotation();
+        HandleStorm();
 
         if (isGliding == true)
+        {
+            this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
+            DisableAllMovements();
+        }
+
+        if (sailData.isSailing == true)
         {
             this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
             DisableAllMovements();
@@ -237,8 +250,6 @@ public class PlayerScript : MonoBehaviour
         }
 
         HandlePluckRigDrop();
-
-       
     }
 
     void HandlePullingInput()
@@ -440,8 +451,14 @@ public class PlayerScript : MonoBehaviour
         if (isMoving)
         {
             moveDirection = new Vector3(0, 0, horizontalInput);
+
+            // Apply storm speed penalty
+            float currentSpeed = stormData.isInStorm
+                ? moveSpeed * stormData.playerSpeedModifier
+                : moveSpeed;
+
             Vector3 intendedPosition =
-                transform.position + (moveDirection * moveSpeed * Time.deltaTime);
+                transform.position + (moveDirection * currentSpeed * Time.deltaTime);
 
             if (isBlockedByRock && IsMovingTowardRock(intendedPosition))
                 return;
@@ -450,7 +467,7 @@ public class PlayerScript : MonoBehaviour
                 return;
 
             lastValidPosition = transform.position;
-            transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
+            transform.Translate(moveDirection * currentSpeed * Time.deltaTime, Space.World);
         }
     }
 
@@ -658,7 +675,7 @@ public class PlayerScript : MonoBehaviour
         crossReferrence.SetActive(true);
 
         Debug.Log("Eating complete!");
-        
+
         pluck.blockade.SetActive(false);
 
         if (pluck.eatButton != null)
@@ -677,47 +694,49 @@ public class PlayerScript : MonoBehaviour
     /// <summary>
     /// Called by PluckZone when the player enters or exits the zone.
     /// </summary>
-  public void SetInPluckZone(bool inZone, PluckZone zone)
-{
-    pluck.isInPluckZone = inZone;
-    pluck.currentPluckZone = zone;
-
-    if (inZone)
+    public void SetInPluckZone(bool inZone, PluckZone zone)
     {
-        // Full reset on re-entry
-        pluck.hitScore = 0;
-        pluck.hasTakenFruit = false;
-        pluck.isPlucking = false;
-        pluck.isPluckRigUp = false;
+        pluck.isInPluckZone = inZone;
+        pluck.currentPluckZone = zone;
 
-        if (armPluckRig != null)
-            armPluckRig.weight = 1f;
+        if (inZone)
+        {
+            // Full reset on re-entry
+            pluck.hitScore = 0;
+            pluck.hasTakenFruit = false;
+            pluck.isPlucking = false;
+            pluck.isPluckRigUp = false;
 
-        // Restore cross reference in case it was hidden
-        if (crossReferrence != null && !crossReferrence.activeSelf)
-            crossReferrence.SetActive(true);
+            if (armPluckRig != null)
+                armPluckRig.weight = 1f;
 
-        // Reset cross transform to initial position
-        crossReferrence.transform.localPosition = initialTransformCrossOffset;
-        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
+            // Restore cross reference in case it was hidden
+            if (crossReferrence != null && !crossReferrence.activeSelf)
+                crossReferrence.SetActive(true);
 
-        if (animator != null)
-            animator.SetBool(PluckData.IS_PLUCK, false);
+            // Reset cross transform to initial position
+            crossReferrence.transform.localPosition = initialTransformCrossOffset;
+            crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+                initialRotationCrossOffset
+            );
 
-        InitRigBeforePluckCompletion();
+            if (animator != null)
+                animator.SetBool(PluckData.IS_PLUCK, false);
+
+            InitRigBeforePluckCompletion();
+        }
+        else
+        {
+            pluck.ExitZone();
+            InitRigAfterPluckCompletion();
+
+            if (animator != null)
+                animator.SetBool(PluckData.IS_PLUCK, false);
+
+            if (armPluckRig != null)
+                armPluckRig.weight = 0f;
+        }
     }
-    else
-    {
-        pluck.ExitZone();
-        InitRigAfterPluckCompletion();
-
-        if (animator != null)
-            animator.SetBool(PluckData.IS_PLUCK, false);
-
-        if (armPluckRig != null)
-            armPluckRig.weight = 0f;
-    }
-}
 
     /// <summary>
     /// Called from the UI Pluck Button (Pointer Down).
@@ -807,7 +826,7 @@ public class PlayerScript : MonoBehaviour
         rigBuilder.layers[1].active = true;
         rigBuilder.layers[2].active = true;
         rigBuilder.layers[3].active = false;
-       
+
         rigBuilder.Build();
     }
 
@@ -823,7 +842,7 @@ public class PlayerScript : MonoBehaviour
 
     private void ResetPluckAnimationStateToDefault()
     {
-          Debug.Log("ResetPluckAnimationStateToDefault() is called");
+        Debug.Log("ResetPluckAnimationStateToDefault() is called");
         if (animator != null)
             animator.SetBool(PluckData.IS_PLUCK, false);
 
@@ -980,6 +999,60 @@ public class PlayerScript : MonoBehaviour
 
     #endregion
 
+
+    // =====================
+    // OASIS PARAMS
+    // =====================
+
+    #region SAIL PARAMS
+    public void OasisZoneOnTrigger(CameraTrigger ct)
+    {
+        if (!isDrinking && !isBreathing && !isCasting)
+        {
+            StartSail();
+            ct.enableEvents?.Invoke();
+            sailData.sailCross.GetComponent<GlideTrigger>().IsPlayerGliding = true;
+        }
+    }
+
+    public void OasisZoneOnExitTrigger(CameraTrigger ct)
+    {
+        if (!isDrinking && !isBreathing && !isCasting)
+        {
+            StopSail();
+            ct.disableEvents?.Invoke();
+            sailData.sailCross.GetComponent<GlideTrigger>().IsPlayerGliding = false;
+        }
+    }
+
+    public void StartSail()
+    {
+        sailData.isSailing = true;
+        animator.SetBool(IS_GLIDING, true);
+        isMoving = false;
+        crossReferrence.SetActive(false);
+        InitSail();
+    }
+
+    public void StopSail()
+    {
+        sailData.isSailing = false;
+        this.transform.parent = null;
+        animator.SetBool(IS_GLIDING, false);
+        crossReferrence.SetActive(true);
+        sailData.sailCross.SetActive(false);
+    }
+
+    void InitSail()
+    {
+        sailData.sailCross.SetActive(true);
+        this.transform.SetParent(sailData.sailCross.transform);
+        glideRig.weight = 1;
+    }
+
+    #endregion
+
+
     // =====================
     // GLIDING
     // =====================
@@ -1009,7 +1082,17 @@ public class PlayerScript : MonoBehaviour
         isGliding = false;
         this.transform.parent = null;
         animator.SetBool(IS_GLIDING, false);
+        glideRig.weight = 0; // ← add this too, was never reset
+
         crossReferrence.SetActive(true);
+
+        // Reset cross back to original local position/rotation
+        crossReferrence.transform.SetParent(handTransform);
+        crossReferrence.transform.localPosition = initialTransformCrossOffset;
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+            initialRotationCrossOffset
+        );
+
         crossGliderGO.SetActive(false);
     }
 
@@ -1184,6 +1267,64 @@ public class PlayerScript : MonoBehaviour
 
     #endregion
 
+
+    // =====================
+    // SANDSTORM
+    // =====================
+
+    #region SANDSTORM
+
+    public void EnterSandStorm()
+    {
+        stormData.isInStorm = true;
+        stormData.Reset();
+        Debug.Log("Player entered sandstorm");
+    }
+
+    public void ExitSandStorm()
+    {
+        stormData.isInStorm = false;
+        animator.speed = 1f; // Reset animation speed
+        stormData.Reset();
+        Debug.Log("Player exited sandstorm");
+    }
+
+   void HandleStorm()
+{
+    if (!stormData.isInStorm) return;
+
+    bool playerIsMoving = Mathf.Abs(horizontalInput) > 0.01f;
+    animator.speed = playerIsMoving ? 1f : 0.4f; // Slow down animation when idle in storm
+
+    if (playerIsMoving)
+    {
+        stormData.idleTimer = 0f;
+        stormData.currentPushbackForce = 0f;
+    }
+    else
+    {
+        stormData.idleTimer += Time.deltaTime;
+
+        if (stormData.idleTimer >= stormData.idleTimeBeforePushback)
+        {
+            stormData.currentPushbackForce = Mathf.MoveTowards(
+                stormData.currentPushbackForce,
+                stormData.maxPushbackForce,
+                stormData.pushbackAcceleration * Time.deltaTime
+            );
+
+            // Just translate the player — no rotation, no animation override
+            Vector3 pushDirection = new Vector3(0, 0, stormData.pushbackDirection);
+            transform.Translate(pushDirection * stormData.currentPushbackForce * Time.deltaTime, Space.World);
+
+            Debug.Log($"Storm pushback force: {stormData.currentPushbackForce:F2}");
+        }
+    }
+}
+
+    #endregion
+
+
     // =====================
     // DAMAGE SYSTEM
     // =====================
@@ -1278,5 +1419,40 @@ public class PluckData
         isInPluckZone = false;
         currentPluckZone = null;
         Reset();
+    }
+}
+
+[System.Serializable]
+public class SailData
+{
+    public bool isSailing = false;
+    public GameObject sailCross;
+}
+
+[System.Serializable]
+public class StormData
+{
+    public bool isInStorm = false;
+    public GameObject stormCross;
+
+    [Header("Speed Settings")]
+    public float playerSpeedModifier = 0.5f;
+
+    [Header("Pushback Settings")]
+    public float idleTimeBeforePushback = 2f; // seconds idle before pushback starts
+    public float pushbackAcceleration = 1.5f; // how fast pushback force builds
+    public float maxPushbackForce = 12f; // final blowaway velocity
+    public float pushbackDirection = -1f; // -1 = left, 1 = right (storm wind direction)
+
+    [HideInInspector]
+    public float currentPushbackForce = 0f;
+
+    [HideInInspector]
+    public float idleTimer = 0f;
+
+    public void Reset()
+    {
+        currentPushbackForce = 0f;
+        idleTimer = 0f;
     }
 }
