@@ -244,7 +244,6 @@ public class PlayerScript : MonoBehaviour
         HandlePullingInput();
         HandleRockRotation();
         HandleStorm();
-        HandleMountainClimbAlignment();
 
         if (isGliding == true)
         {
@@ -270,6 +269,15 @@ public class PlayerScript : MonoBehaviour
             crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
                 rockPushInitialAngle
             );
+
+        if (mountainClimbData.isInClimbZone)
+        {
+            transform.rotation = UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
+        }
+        if (climbData.isInClimbZone)
+        {
+            transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+        }
 
         HandlePluckRigDrop();
     }
@@ -640,34 +648,45 @@ public class PlayerScript : MonoBehaviour
         climbData.isInClimbZone = true;
         climbData.isPlayerClimbing = false;
         climbData.isHoldingClimb = false;
+        climbData.hasReachedTop = false;
 
-        // Freeze physics — climbing is fully animation-driven
-        // rb.isKinematic = true;
         isMoving = false;
         animator.applyRootMotion = true;
 
-        // Swap cross for the climb cross if assigned
+        // ── Align player to the ladder ──
+        if (climbData.ladderTransform != null)
+        {
+            transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+            transform.position =
+                climbData.ladderTransform.position
+                + climbData.ladderTransform.TransformDirection(climbData.ladderAlignOffset);
+        }
+        else
+        {
+            if (climbData.positionOffset != Vector3.zero)
+                transform.localPosition = climbData.positionOffset;
+
+            if (climbData.rotationOffset != Vector3.zero)
+                transform.localRotation = UnityEngine.Quaternion.Euler(climbData.rotationOffset);
+
+            Debug.LogWarning("ClimbData: ladderTransform is not assigned — using manual offsets.");
+        }
+
+        // Swap cross
         if (climbData.crossToClimbGO != null)
         {
             crossReferrence.SetActive(false);
             climbData.crossToClimbGO.SetActive(true);
         }
 
-        // Optional snap to a fixed climb entry position/rotation
-        if (climbData.positionOffset != Vector3.zero)
-            transform.localPosition = climbData.positionOffset;
-
-        if (climbData.rotationOffset != Vector3.zero)
-            transform.localRotation = UnityEngine.Quaternion.Euler(climbData.rotationOffset);
-
-        // Enter climb idle immediately
+        // Enter climb idle
         if (animator != null)
         {
             animator.SetBool(IS_CLIMBING, false);
             animator.SetBool(IS_CLIMB_IDLE, true);
         }
 
-        Debug.Log("ClimbUpZone entered — climb idle active. Hold climb button to climb.");
+        Debug.Log("ClimbUpZone entered — aligned to ladder, climb idle active.");
     }
 
     /// <summary>
@@ -816,6 +835,38 @@ public class PlayerScript : MonoBehaviour
 
     #region MOUNTAIN CLIMB
 
+    void OnAnimatorMove()
+    {
+        // ── Mountain climb: project root motion along ladder up axis ──
+        if (mountainClimbData.isInClimbZone && mountainClimbData.isPlayerClimbing)
+        {
+            Vector3 ladderUp =
+                mountainClimbData.ladderTransform != null
+                    ? mountainClimbData.ladderTransform.up
+                    : transform.up;
+
+            float upMagnitude = Vector3.Dot(animator.deltaPosition, ladderUp);
+            transform.position += ladderUp * upMagnitude;
+            transform.rotation = UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
+            return;
+        }
+
+        // ── Regular climb: same logic using climbData ──
+        if (climbData.isInClimbZone && climbData.isPlayerClimbing)
+        {
+            Vector3 ladderUp =
+                climbData.ladderTransform != null ? climbData.ladderTransform.up : transform.up;
+
+            float upMagnitude = Vector3.Dot(animator.deltaPosition, ladderUp);
+            transform.position += ladderUp * upMagnitude;
+            transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+            return;
+        }
+
+        // ── All other root motion states: apply normally ──
+        if (animator.applyRootMotion)
+            transform.position += animator.deltaPosition;
+    }
 
     /// <summary>
     /// Called by CameraTrigger when the player enters the ClimbUpZone.
@@ -829,51 +880,53 @@ public class PlayerScript : MonoBehaviour
         mountainClimbData.isInClimbZone = true;
         mountainClimbData.isPlayerClimbing = false;
         mountainClimbData.isHoldingClimb = false;
+        mountainClimbData.hasReachedTop = false;
 
-        // Freeze physics — climbing is fully animation-driven
-        // rb.isKinematic = true;
         isMoving = false;
         animator.applyRootMotion = true;
 
-        // Swap cross for the climb cross if assigned
+        // ── Align player to the ladder ──
+        if (mountainClimbData.ladderTransform != null)
+        {
+            // Match the ladder's rotation exactly so the player faces the wall correctly
+            transform.rotation = UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
+
+            // Snap position to the ladder's base + any fine-tune offset
+            transform.position =
+                mountainClimbData.ladderTransform.position
+                + mountainClimbData.ladderTransform.TransformDirection(
+                    mountainClimbData.ladderAlignOffset
+                );
+        }
+        else
+        {
+            // Fallback: use manual offsets if no ladder assigned
+            if (mountainClimbData.positionOffset != Vector3.zero)
+                transform.localPosition = mountainClimbData.positionOffset;
+
+            if (mountainClimbData.rotationOffset != Vector3.zero)
+                transform.localRotation = UnityEngine.Quaternion.Euler(30f, 0, 0);
+
+            Debug.LogWarning(
+                "MountainClimbData: ladderTransform is not assigned — using manual offsets."
+            );
+        }
+
+        // Swap cross
         if (mountainClimbData.crossToClimbGO != null)
         {
             crossReferrence.SetActive(false);
             mountainClimbData.crossToClimbGO.SetActive(true);
         }
 
-        // Optional snap to a fixed climb entry position/rotation
-        if (mountainClimbData.positionOffset != Vector3.zero)
-            transform.localPosition = mountainClimbData.positionOffset;
-
-        if (mountainClimbData.rotationOffset != Vector3.zero)
-            transform.localRotation = UnityEngine.Quaternion.Euler(
-                mountainClimbData.rotationOffset
-            );
-
-        // Enter climb idle immediately
+        // Enter climb idle
         if (animator != null)
         {
             animator.SetBool(IS_CLIMBING, false);
             animator.SetBool(IS_CLIMB_IDLE, true);
         }
 
-        Debug.Log("MountainUpZone entered — climb idle active. Hold climb button to climb.");
-    }
-
-    void HandleMountainClimbAlignment()
-    {
-        if (!mountainClimbData.isInClimbZone)
-            return;
-
-        // Smoothly push the player's Z position toward the ladder's Z position
-        Vector3 pos = transform.position;
-        pos.z = Mathf.Lerp(
-            pos.z,
-            mountainClimbData.ladderZPosition,
-            Time.deltaTime * mountainClimbData.alignmentSpeed
-        );
-        transform.position = pos;
+        Debug.Log("MountainUpZone entered — aligned to ladder, climb idle active.");
     }
 
     /// <summary>
@@ -970,7 +1023,7 @@ public class PlayerScript : MonoBehaviour
         else
         {
             Debug.LogWarning(
-                "MountainClimbData: exitSnapTarget is not assigned — player will not be snapped."
+                "ClimbData: exitSnapTarget is not assigned — player will not be snapped."
             );
         }
 
@@ -1960,20 +2013,25 @@ public class ClimbData
     public Button climbBtn;
 
     [Header("Climb Cross")]
-    public GameObject crossToClimbGO; // Swap-in cross used during climbing
+    public GameObject crossToClimbGO;
 
     [Header("Entry Snap")]
-    public Vector3 positionOffset; // Optional position nudge on zone entry
-    public Vector3 rotationOffset; // Optional rotation snap on zone entry
+    public Vector3 positionOffset;
+    public Vector3 rotationOffset;
 
     [Header("ClimbToTop Exit Snap")]
-    public Transform exitSnapTarget; // assign in Inspector — where the player lands after climbing
+    public Transform exitSnapTarget;
 
     [Header("State — read only at runtime")]
     public bool isInClimbZone = false;
-    public bool isPlayerClimbing = false; // true only while button held
-    public bool isHoldingClimb = false; // mirrors isPlayerClimbing, for external checks
+    public bool isPlayerClimbing = false;
+    public bool isHoldingClimb = false;
     public bool hasReachedTop = false;
+
+    [Header("Ladder Alignment")] // ← ADD THESE THREE
+    public Transform ladderTransform;
+    public Vector3 ladderAlignOffset;
+    public Vector3 climbSnapRotation;
 }
 
 [System.Serializable]
@@ -1998,6 +2056,7 @@ public class MountainClimbData
     public bool hasReachedTop = false;
 
     [Header("Ladder Alignment")]
-    public float ladderZPosition; // the exact world Z position of the ladder
-    public float alignmentSpeed = 10f; // how fast the player snaps to the ladder Z
+    public Transform ladderTransform;
+    public Vector3 ladderAlignOffset;
+    public Vector3 climbSnapRotation; // set this in Inspector to match your ladder angle
 }
