@@ -15,8 +15,12 @@ public class CameraTrigger : MonoBehaviour
         OasisExit,
         SandStormEnter,
         SandStormExit,
-
         SandStormRockEnter,
+        AfterSandStormEnter,
+        ClimbUpZone,
+        ClimbOffZone, 
+        MountainClimbUpZone,
+        MountainClimbOffZone,
     }
 
     public TriggerType triggerType;
@@ -133,6 +137,7 @@ public class CameraTrigger : MonoBehaviour
 
         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormEnter)
         {
+            enableEvents?.Invoke();
             Debug.Log("Player entered sandstorm zone");
             enableEvents?.Invoke();
             if (cameraToEnable != null)
@@ -152,29 +157,94 @@ public class CameraTrigger : MonoBehaviour
                 cameraToDisable.SetActive(true);
             other.GetComponent<PlayerScript>().ExitSandStorm();
         }
-        if (other.CompareTag("Player") && triggerType == TriggerType.SandStormEnter)
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
         {
             enableEvents?.Invoke();
         }
 
-         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
+        if (other.CompareTag("Player") && triggerType == TriggerType.AfterSandStormEnter)
         {
             enableEvents?.Invoke();
+            Debug.Log("Player entered sandstorm zone");
+            enableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            other.GetComponent<PlayerScript>().AfterEnterSandStorm();
+        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.ClimbUpZone)
+        {
+            enableEvents?.Invoke();
+
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(true);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(false);
+
+            other.GetComponent<PlayerScript>().ClimbUpZoneOnTriggerEnter();
+        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.ClimbOffZone)
+        {
+            disableEvents?.Invoke();
+
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(false);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(true);
+
+            other.GetComponent<PlayerScript>().ClimbOffZoneOnTriggerEnter();
+        }
+
+         if (other.CompareTag("Player") && triggerType == TriggerType.MountainClimbUpZone)
+        {
+            enableEvents?.Invoke();
+
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(true);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(false);
+
+            other.GetComponent<PlayerScript>().MountainUpZoneOnTriggerEnter();
+        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.MountainClimbOffZone)
+        {
+            disableEvents?.Invoke();
+
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(false);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(true);
+
+            other.GetComponent<PlayerScript>().MountainClimbOffZoneOnTriggerEnter();
         }
     }
 
-
     void OnTriggerExit(Collider other)
     {
-         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
+        if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
         {
             disableEvents?.Invoke();
         }
     }
-
-
-
-
-
-
 }

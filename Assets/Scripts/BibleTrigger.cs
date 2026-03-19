@@ -30,7 +30,10 @@ public class BibleTrigger : MonoBehaviour
 
     public event Action OnTypingFinishEvent;
 
+    public UnityEvent OnTypeFinishEvent;
+
     public UnityEvent enableEvents;
+    
     public UnityEvent disableEvents;
 
     private void OnEnable()
@@ -59,8 +62,6 @@ public class BibleTrigger : MonoBehaviour
 
         hasTriggered = true;
 
-        bottomContainer.SetActive(true);
-
         if (typingRoutine != null)
             StopCoroutine(typingRoutine);
 
@@ -75,6 +76,7 @@ public class BibleTrigger : MonoBehaviour
 
     IEnumerator TypeVerse()
     {
+        bottomContainer.SetActive(true);
         verseText.text = "";
 
         foreach (char c in verse)
@@ -84,5 +86,48 @@ public class BibleTrigger : MonoBehaviour
         }
 
         OnTypingFinishEvent?.Invoke();
+        OnTypeFinishEvent?.Invoke();
+    }
+
+    public void CallNormalTypeVerse()
+    {
+        StartCoroutine(TypeVerse());
+    }
+
+    IEnumerator TypeVerseAux()
+    {
+        yield return new WaitForSeconds(6f);
+
+        bottomContainer.SetActive(true);
+        verseText.text = "";
+
+        foreach (char c in verse)
+        {
+            verseText.text += c;
+            yield return new WaitForSeconds(typingSpeed);
+        }
+
+        OnTypingFinishEvent?.Invoke();
+        OnTypeFinishEvent?.Invoke();
+    }
+
+    public void CallTyping()
+    {
+        Debug.Log("Called TypeVerse()");
+
+        if (typingRoutine != null)
+            StopCoroutine(typingRoutine);
+
+        typingRoutine = StartCoroutine(TypeVerse());
+    }
+
+    public void CallTypingAux()
+    {
+        Debug.Log("Called CallTypingAux()");
+
+        if (typingRoutine != null)
+            StopCoroutine(typingRoutine);
+
+        typingRoutine = StartCoroutine(TypeVerseAux());
     }
 }
