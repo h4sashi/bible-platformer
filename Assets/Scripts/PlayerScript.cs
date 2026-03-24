@@ -1177,17 +1177,25 @@ public class PlayerScript : MonoBehaviour
 
         ledgeZoneData.isNoCrossWalk = false;
         ledgeZoneData.isLedgeFinished = false;
-        isNoCrossMoving = false; // ← reset independent bool
+        isNoCrossMoving = false;
 
         if (animator != null)
         {
             animator.SetBool(IS_NO_CROSS_WALK, false);
-            animator.SetBool(IS_NO_CROSS_IDLE, false); // ← clear new bool
-            animator.SetBool(IS_MOVING, false);
+            animator.SetBool(IS_NO_CROSS_IDLE, false);
+            animator.SetBool(IS_MOVING, false); // let GetInput() take over cleanly next frame
         }
+
+        // Restore rig weight immediately rather than waiting for Lerp to catch up
+        if (walkRig != null)
+            walkRig.weight = 1f;
+        if (armRig != null)
+            armRig.weight = 1f;
 
         if (crossReferrence != null)
             crossReferrence.SetActive(true);
+
+        Debug.Log("LedgeZoneOff — default locomotion and rig restored.");
     }
 
     /// <summary>
@@ -1259,7 +1267,7 @@ public class PlayerScript : MonoBehaviour
 
         yield return new WaitForSeconds(clipLength);
 
-        // StopLedge(); // do not uncomment 
+        // StopLedge(); // do not uncomment
         Debug.Log("Ledge animation complete — transitioning to walk.");
     }
 
