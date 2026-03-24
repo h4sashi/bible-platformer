@@ -18,9 +18,12 @@ public class CameraTrigger : MonoBehaviour
         SandStormRockEnter,
         AfterSandStormEnter,
         ClimbUpZone,
-        ClimbOffZone, 
+        ClimbOffZone,
         MountainClimbUpZone,
         MountainClimbOffZone,
+
+        LedgeZone,
+        LedgeZoneOff,
     }
 
     public TriggerType triggerType;
@@ -207,7 +210,7 @@ public class CameraTrigger : MonoBehaviour
             other.GetComponent<PlayerScript>().ClimbOffZoneOnTriggerEnter();
         }
 
-         if (other.CompareTag("Player") && triggerType == TriggerType.MountainClimbUpZone)
+        if (other.CompareTag("Player") && triggerType == TriggerType.MountainClimbUpZone)
         {
             enableEvents?.Invoke();
 
@@ -238,13 +241,46 @@ public class CameraTrigger : MonoBehaviour
 
             other.GetComponent<PlayerScript>().MountainClimbOffZoneOnTriggerEnter();
         }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.LedgeZone)
+        {
+            enableEvents?.Invoke();
+
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(true);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(false);
+
+            other.GetComponent<PlayerScript>().LedgeZoneOnTriggerEnter();
+        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.LedgeZoneOff)
+        {
+            disableEvents?.Invoke();
+
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(false);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(true);
+
+            other.GetComponent<PlayerScript>().LedgeZoneOffOnTriggerEnter();
+        }
     }
 
     void OnTriggerExit(Collider other)
     {
         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormRockEnter)
-        {
             disableEvents?.Invoke();
-        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.LedgeZone)
+            other.GetComponent<PlayerScript>().LedgeZoneOnTriggerExit();
     }
 }

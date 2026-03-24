@@ -75,6 +75,11 @@ public class PlayerScript : MonoBehaviour
     private const string IS_CLIMB_IDLE = "IsClimbIdle";
     private const string IS_CLIMB_TO_TOP = "IsClimbToTop";
 
+    private const string IS_NO_CROSS_WALK = "IsNoCrossWalk";
+    private const string IS_NO_CROSS_IDLE = "IsNoCrossIdle";
+    private bool isNoCrossMoving;
+    private const string LEDGE_TRIGGER = "LedgeTrigger";
+
     [Header("Initial Cross Setup")]
     public Vector3 initialTransformCrossOffset;
     public Vector3 initialRotationCrossOffset;
@@ -144,8 +149,11 @@ public class PlayerScript : MonoBehaviour
     [Header("Climb Settings")]
     public ClimbData climbData = new ClimbData();
 
-    [Header("Mountai Settings")]
+    [Header("Mountain Settings")]
     public MountainClimbData mountainClimbData = new MountainClimbData();
+
+    [Header("Ledge Settings")]
+    public LedgeZoneData ledgeZoneData = new LedgeZoneData();
 
     private void Awake()
     {
@@ -231,13 +239,22 @@ public class PlayerScript : MonoBehaviour
             && !isPulling
             && !climbData.isInClimbZone
             && !mountainClimbData.isInClimbZone
+            && !ledgeZoneData.isLedgeActive
         )
         {
-            HandleMovement();
-            HandleRotation();
+            if (!ledgeZoneData.isNoCrossWalk)
+            {
+                HandleMovement();
+                HandleRotation();
+            }
+            else
+            {
+                HandleNoCrossMovement(); // ← independent track
+            }
         }
 
         HandleAnimation();
+        HandleNoCrossAnimation(); // ← independent animation track
         HandleRigWeight();
         HandleCastingInput();
         HandleDrinkingInput();
@@ -417,8 +434,10 @@ public class PlayerScript : MonoBehaviour
             && !isSleeping
             && !pluck.isPlucking
             && !pluck.isEating
-            && !climbData.isInClimbZone // blocked during any climb state
+            && !climbData.isInClimbZone
             && !mountainClimbData.isInClimbZone
+            && !ledgeZoneData.isLedgeActive
+            && !ledgeZoneData.isNoCrossWalk // ← add this line
             && Mathf.Abs(horizontalInput) > 0.01f;
     }
 
@@ -520,6 +539,50 @@ public class PlayerScript : MonoBehaviour
         return false;
     }
 
+    #region NO CROSS WALK
+    void HandleNoCrossMovement()
+    {
+        if (!ledgeZoneData.isNoCrossWalk)
+            return;
+
+        // Independent input read (respects mobile too)
+        float input = useMobileControls ? mobileHorizontalInput : Input.GetAxisRaw("Horizontal");
+
+        isNoCrossMoving = Mathf.Abs(input) > 0.01f;
+
+        if (isNoCrossMoving)
+        {
+            Vector3 dir = new Vector3(0, 0, input);
+            transform.Translate(dir * moveSpeed * Time.deltaTime, Space.World);
+
+            // Independent rotation
+            Quaternion targetRot =
+                input < 0 ? Quaternion.Euler(0, 180, 0) : Quaternion.Euler(0, 0, 0);
+
+            transform.rotation = Quaternion.Lerp(
+                transform.rotation,
+                targetRot,
+                smoothRotation * Time.deltaTime
+            );
+        }
+    }
+
+    void HandleNoCrossAnimation()
+    {
+        if (!ledgeZoneData.isNoCrossWalk)
+            return;
+
+        animator.SetBool(IS_NO_CROSS_WALK, true);
+        animator.SetBool(IS_MOVING, false); // make sure default walk is off
+        animator.SetBool(IS_NO_CROSS_IDLE, !isNoCrossMoving);
+
+        // Drive the walk vs idle within NoCross states
+        // Re-use IsWalking just as a switch inside the NoCross sub-machine
+        animator.SetBool(IS_MOVING, isNoCrossMoving);
+    }
+
+    #endregion
+
     public void OnFastStopTriggerEnter(Vector3 stopPosition, bool blockLeft, bool blockRight)
     {
         isBlockedByFastStop = true;
@@ -562,8 +625,11 @@ public class PlayerScript : MonoBehaviour
 
     void HandleAnimation()
     {
-        if (animator != null)
-            animator.SetBool(IS_MOVING, isMoving);
+        if (animator == null)
+            return;
+
+        animator.SetBool(IS_MOVING, isMoving && !ledgeZoneData.isNoCrossWalk);
+        animator.SetBool(IS_NO_CROSS_WALK, isMoving && ledgeZoneData.isNoCrossWalk);
     }
 
     void HandleRigWeight()
@@ -571,7 +637,6 @@ public class PlayerScript : MonoBehaviour
         if (walkRig == null || armRig == null || glideRig == null)
             return;
 
-        // Rigs are fully suppressed while climbing (no rig needed)
         if (
             isBreathing
             || isDrinking
@@ -582,6 +647,8 @@ public class PlayerScript : MonoBehaviour
             || pluck.isPlucking
             || climbData.isInClimbZone
             || mountainClimbData.isInClimbZone
+            || ledgeZoneData.isLedgeActive
+            || ledgeZoneData.isNoCrossWalk
         )
             targetRigWeight = 0f;
         else
@@ -1057,6 +1124,176 @@ public class PlayerScript : MonoBehaviour
         Debug.Log("Climbing fully stopped — player free.");
     }
     #endregion
+
+
+    // =====================
+    // LEDGE
+    // =====================
+
+    #region LEDGE
+
+    /// <summary>
+    /// Called by CameraTrigger when the player enters the LedgeZone.
+    /// Shows the ledge button — player must press it to trigger the animation.
+    /// </summary>
+    public void LedgeZoneOnTriggerEnter()
+    {
+        if (isDrinking || isBreathing || isCasting || isGliding || isPulling || isSleeping)
+            return;
+
+        ledgeZoneData.isLedgeActive = false;
+        ledgeZoneData.isLedgeFinished = false;
+
+        // Show the ledge button so the player can choose when to grab
+        if (ledgeZoneData.ledgeBtn != null)
+            ledgeZoneData.ledgeBtn.gameObject.SetActive(true);
+
+        Debug.Log("LedgeZone entered — ledge button active.");
+    }
+
+    /// <summary>
+    /// Called by CameraTrigger when the player exits the LedgeZone without pressing.
+    /// Cleans up the button if they walk away.
+    /// </summary>
+    public void LedgeZoneOnTriggerExit()
+    {
+        if (ledgeZoneData.isLedgeActive)
+            return; // already mid-animation, don't interrupt
+
+        if (ledgeZoneData.ledgeBtn != null)
+            ledgeZoneData.ledgeBtn.gameObject.SetActive(false);
+
+        Debug.Log("LedgeZone exited without pressing.");
+    }
+
+    /// <summary>
+    /// Called by CameraTrigger when the player enters LedgeZoneOff.
+    /// Ends no-cross walk and restores the cross and normal locomotion.
+    /// </summary>
+    public void LedgeZoneOffOnTriggerEnter()
+    {
+        if (!ledgeZoneData.isNoCrossWalk && !ledgeZoneData.isLedgeFinished)
+            return;
+
+        ledgeZoneData.isNoCrossWalk = false;
+        ledgeZoneData.isLedgeFinished = false;
+        isNoCrossMoving = false; // ← reset independent bool
+
+        if (animator != null)
+        {
+            animator.SetBool(IS_NO_CROSS_WALK, false);
+            animator.SetBool(IS_NO_CROSS_IDLE, false); // ← clear new bool
+            animator.SetBool(IS_MOVING, false);
+        }
+
+        if (crossReferrence != null)
+            crossReferrence.SetActive(true);
+    }
+
+    /// <summary>
+    /// Called by the UI Ledge Button — Pointer Down.
+    /// Deactivates crossReferrence, activates crossLedge, plays ledge animation.
+    /// </summary>
+    public void OnLedgeButtonDown()
+    {
+        if (ledgeZoneData.isLedgeActive || ledgeZoneData.isLedgeFinished)
+            return;
+
+        if (isDrinking || isBreathing || isCasting || isGliding || isPulling)
+            return;
+
+        ledgeZoneData.isLedgeActive = true;
+        OnFastStopTriggerEnter(transform.position, false, false);
+        ledgeZoneData.blockade.GetComponent<FastStopUtils>().isFastStoppingLeft = false;
+        ledgeZoneData.blockade.GetComponent<FastStopUtils>().isFastStoppingRight = false;
+
+        ledgeZoneData.descriptiveCanvas.SetActive(false);
+        isMoving = false;
+
+        if (ledgeZoneData.ledgeBtn != null)
+            ledgeZoneData.ledgeBtn.gameObject.SetActive(false);
+
+        crossReferrence.SetActive(false);
+        if (ledgeZoneData.crossLedge != null)
+            ledgeZoneData.crossLedge.SetActive(true);
+
+        if (
+            ledgeZoneData.crossLedge != null
+            && ledgeZoneData.crossLedgeFinalPosition != Vector3.zero
+        )
+            ledgeZoneData.crossLedge.transform.localPosition =
+                ledgeZoneData.crossLedgeFinalPosition;
+
+        // Trigger the ledge animation
+        if (animator != null)
+            animator.SetBool(LEDGE_TRIGGER, true);
+
+        StartCoroutine(LedgeRoutine());
+        Debug.Log("Ledge button pressed — playing ledge animation.");
+    }
+
+    private IEnumerator LedgeRoutine()
+    {
+        // Wait one frame for animator to register the trigger
+        yield return null;
+
+        // Wait up to 2 seconds for the Ledge state to begin
+        float timeout = 2f;
+        float elapsed = 0f;
+
+        while (!animator.GetCurrentAnimatorStateInfo(0).IsName("Ledge"))
+        {
+            elapsed += Time.deltaTime;
+            if (elapsed >= timeout)
+            {
+                Debug.LogWarning("LedgeRoutine: Timed out waiting for Ledge state.");
+                // StopLedge(); //do not uncomment
+                yield break;
+            }
+            yield return null;
+        }
+
+        // Get the exact clip length from the Animator and wait that long
+        float clipLength = animator.GetCurrentAnimatorStateInfo(0).length;
+        Debug.Log($"Ledge state started — clip length: {clipLength:F2}s");
+
+        yield return new WaitForSeconds(clipLength);
+
+        // StopLedge(); // do not uncomment 
+        Debug.Log("Ledge animation complete — transitioning to walk.");
+    }
+
+    public void StopLedge() //Use in animation event for clean execution
+    {
+        ledgeZoneData.isLedgeActive = false;
+        ledgeZoneData.isLedgeFinished = true;
+        ledgeZoneData.isNoCrossWalk = true;
+
+        // Clear ledge trigger
+        if (animator != null)
+        {
+            animator.ResetTrigger(LEDGE_TRIGGER);
+            animator.SetBool(IS_NO_CROSS_WALK, true); // ← enter no-cross walk state
+            animator.SetBool(IS_MOVING, false); // let walk system take over cleanly
+        }
+
+        // Keep crossLedge hidden, keep crossReferrence hidden — player has no cross yet
+        if (ledgeZoneData.crossLedge != null)
+            ledgeZoneData.crossLedge.SetActive(false);
+
+        if (ledgeZoneData.crossLedgeDefault != null)
+            ledgeZoneData.crossLedgeDefault.SetActive(true);
+
+        // crossReferrence stays OFF — restored only at LedgeZoneOff
+        if (crossReferrence != null)
+            crossReferrence.SetActive(false);
+
+        Debug.Log("Ledge complete — entering no-cross walk mode.");
+    }
+
+    #endregion
+
+
     // =====================
     // EATING
     // =====================
@@ -2059,4 +2296,19 @@ public class MountainClimbData
     public Transform ladderTransform;
     public Vector3 ladderAlignOffset;
     public Vector3 climbSnapRotation; // set this in Inspector to match your ladder angle
+}
+
+[System.Serializable]
+public class LedgeZoneData
+{
+    public Button ledgeBtn;
+    public GameObject crossLedge;
+    public GameObject crossLedgeDefault;
+    public GameObject blockade;
+    public GameObject descriptiveCanvas;
+    public Vector3 crossLedgeFinalPosition;
+
+    public bool isLedgeActive = false;
+    public bool isLedgeFinished = false;
+    public bool isNoCrossWalk = false;
 }
