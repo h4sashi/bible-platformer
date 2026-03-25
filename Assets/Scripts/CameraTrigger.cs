@@ -24,6 +24,8 @@ public class CameraTrigger : MonoBehaviour
 
         LedgeZone,
         LedgeZoneOff,
+        SecondLedgeZone,
+        SecondLedgeZoneOff,
     }
 
     public TriggerType triggerType;
@@ -273,6 +275,34 @@ public class CameraTrigger : MonoBehaviour
 
             other.GetComponent<PlayerScript>().LedgeZoneOffOnTriggerEnter();
         }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.SecondLedgeZone)
+        {
+            enableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(true);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(false);
+            other.GetComponent<PlayerScript>().SecondLedgeZoneOnTriggerEnter();
+        }
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.SecondLedgeZoneOff)
+        {
+            disableEvents?.Invoke();
+            if (cameraToEnable != null)
+                cameraToEnable.SetActive(true);
+            if (cameraToDisable != null)
+                cameraToDisable.SetActive(false);
+            if (objectToEnable != null)
+                objectToEnable.SetActive(false);
+            if (objectToDisable != null)
+                objectToDisable.SetActive(true);
+            other.GetComponent<PlayerScript>().SecondLedgeZoneOffOnTriggerEnter();
+        }
     }
 
     void OnTriggerExit(Collider other)
@@ -282,5 +312,8 @@ public class CameraTrigger : MonoBehaviour
 
         if (other.CompareTag("Player") && triggerType == TriggerType.LedgeZone)
             other.GetComponent<PlayerScript>().LedgeZoneOnTriggerExit();
+
+        if (other.CompareTag("Player") && triggerType == TriggerType.SecondLedgeZone)
+            other.GetComponent<PlayerScript>().SecondLedgeZoneOnTriggerExit();
     }
 }
