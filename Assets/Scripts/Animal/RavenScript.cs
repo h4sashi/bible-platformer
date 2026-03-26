@@ -1,9 +1,11 @@
-using UnityEngine;
 using System;
 using System.Collections;
+using UnityEngine;
 
 public class RavenScript : MonoBehaviour
 {
+    public GameObject playerControlUI;
+
     [Header("Movement")]
     public Transform target;
     public float moveSpeed = 5f;
@@ -18,16 +20,17 @@ public class RavenScript : MonoBehaviour
     public GameObject crowCamera;
 
     public GameObject breadTransform;
+
     // SleepTrigger will subscribe to this to know when crow has arrived
     public Action onReachedTarget;
 
     private bool isFlying = false;
 
     [Header("Fly Away Settings")]
-    public float flyAwayHeight = 10f;          // How high the crow flies when leaving
-    public float flyAwayHorizontalRange = 8f;  // Random horizontal spread
-    public float flyAwaySpeed = 6f;            // Speed of the fly-away movement
-    public float disableDelay = 3f;            // Seconds after reaching fly-away point before disabling
+    public float flyAwayHeight = 10f; // How high the crow flies when leaving
+    public float flyAwayHorizontalRange = 8f; // Random horizontal spread
+    public float flyAwaySpeed = 6f; // Speed of the fly-away movement
+    public float disableDelay = 3f; // Seconds after reaching fly-away point before disabling
 
     private bool isFlyingAway = false;
     private Vector3 flyAwayTarget;
@@ -59,6 +62,8 @@ public class RavenScript : MonoBehaviour
     // Called by SleepTrigger when it's time for crow to fly to its perch
     public void StartFlying()
     {
+        if (breadTransform.gameObject != null)
+            breadTransform.gameObject.SetActive(true);
         isFlying = true;
         hasReachedTarget = false;
 
@@ -68,6 +73,7 @@ public class RavenScript : MonoBehaviour
 
     void MoveToTarget()
     {
+        playerControlUI.SetActive(false);
         Vector3 direction = (target.position - transform.position);
         float distance = direction.magnitude;
 
@@ -85,6 +91,7 @@ public class RavenScript : MonoBehaviour
     {
         hasReachedTarget = true;
         isFlying = false;
+        playerControlUI.SetActive(true);
 
         if (anim != null)
         {
@@ -103,7 +110,8 @@ public class RavenScript : MonoBehaviour
 
     public void FlyAway()
     {
-        if (isFlyingAway) return; // Already flying away, don't re-trigger
+        if (isFlyingAway)
+            return; // Already flying away, don't re-trigger
 
         isFlyingAway = true;
         isFlying = false;

@@ -194,7 +194,7 @@ public partial class PlayerScript
         canvasTrigger = null;
 
         if (drinkButton != null)
-            drinkButton.interactable = false;
+            drinkButton.gameObject.SetActive(false);
     }
 
     private void OnDrinkingBenefits()
@@ -268,6 +268,7 @@ public partial class PlayerScript
             pluck.apple.SetActive(false);
 
         crossReferrence.SetActive(true);
+        eatBlockade.SetActive(false);
 
         Debug.Log("Eating complete!");
 
@@ -297,6 +298,7 @@ public partial class PlayerScript
             pluck.hasTakenFruit = false;
             pluck.isPlucking = false;
             pluck.isPluckRigUp = false;
+            pluck.pluckButton.gameObject.SetActive(true);
 
             if (armPluckRig != null)
                 armPluckRig.weight = 1f;

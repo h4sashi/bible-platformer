@@ -74,9 +74,10 @@ public class GenericTrigger : MonoBehaviour
             Debug.Log("Player has hit Rock Obstacle");
             other.GetComponent<PlayerScript>().OnRockObstacleTriggerEnter(this.transform.position);
 
+
                 if (actionBtn != null)
                 {
-                    actionBtn.interactable = true;
+                    actionBtn.gameObject.SetActive(true);
                 }
             else
             {
@@ -130,7 +131,7 @@ public class GenericTrigger : MonoBehaviour
             other.GetComponent<PlayerScript>().OnRockObstacleTriggerExit();
                 if (actionBtn != null)
                 {
-                    actionBtn.interactable = false;
+                    actionBtn.gameObject.SetActive(false);
                 }
                 else
                 {

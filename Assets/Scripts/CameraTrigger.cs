@@ -30,6 +30,9 @@ public class CameraTrigger : MonoBehaviour
 
     public TriggerType triggerType;
 
+    [Header("Glide Settings")]
+    public string glideDataId = "default";
+
     public GameObject cameraToEnable;
     public GameObject cameraToDisable;
 
@@ -50,7 +53,7 @@ public class CameraTrigger : MonoBehaviour
             if (cameraToDisable != null)
                 cameraToDisable.SetActive(false);
 
-            other.GetComponent<PlayerScript>().glideRig.weight = 0;
+            other.GetComponent<PlayerScript>().glideData.glideRig.weight = 0;
             other.GetComponent<PlayerScript>().OasisZoneOnTrigger(this);
             if (objectToEnable != null)
             {
@@ -81,7 +84,7 @@ public class CameraTrigger : MonoBehaviour
             if (cameraToDisable != null)
                 cameraToDisable.SetActive(true);
 
-            other.GetComponent<PlayerScript>().glideRig.weight = 0;
+            other.GetComponent<PlayerScript>().glideData.glideRig.weight = 0;
             other.GetComponent<PlayerScript>().OasisZoneOnExitTrigger(this);
             if (objectToEnable != null)
             {
@@ -104,40 +107,30 @@ public class CameraTrigger : MonoBehaviour
 
         if (other.CompareTag("Player") && triggerType == TriggerType.GlideZoneOn)
         {
-            Debug.Log("Player has enetered Glide Zone");
-
+            Debug.Log("Player has entered Glide Zone");
             enableEvents?.Invoke();
             if (cameraToEnable != null)
                 cameraToEnable.SetActive(true);
             if (cameraToDisable != null)
                 cameraToDisable.SetActive(false);
-
-            other.GetComponent<PlayerScript>().glideRig.weight = 0;
-            other.GetComponent<PlayerScript>().GlideZoneOnTrigger(this);
             if (objectToEnable != null)
-            {
                 objectToEnable.SetActive(true);
-            }
-            else
-            {
-                return;
-            }
             if (objectToDisable != null)
-            {
                 objectToDisable.SetActive(false);
-            }
-            else
-            {
-                return;
-            }
-            // objectToEnable.SetActive(true);
+
+            PlayerScript ps = other.GetComponent<PlayerScript>();
+            GlideData data = ps.GetGlideDataById(glideDataId); // ← resolves to glideData or mountainGlideData
+            ps.glideData.glideRig.weight = 0;
+            ps.GlideZoneOnTrigger(this, data);
         }
 
         if (other.CompareTag("Player") && triggerType == TriggerType.GlideZoneOff)
         {
             Debug.Log("Player has exited Glide Zone");
             disableEvents?.Invoke();
-            other.GetComponent<PlayerScript>().StopGliding();
+            PlayerScript ps = other.GetComponent<PlayerScript>();
+            GlideData data = ps.GetGlideDataById(glideDataId); // ← same lookup
+            ps.StopGliding(data);
         }
 
         if (other.CompareTag("Player") && triggerType == TriggerType.SandStormEnter)

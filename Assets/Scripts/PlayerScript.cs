@@ -15,6 +15,7 @@ public partial class PlayerScript : MonoBehaviour
 
     [Header("UI Buttons")]
     public Button drinkButton;
+    public Button pullButton;
 
     [SerializeField]
     private float smoothRotation = 10f;
@@ -27,8 +28,11 @@ public partial class PlayerScript : MonoBehaviour
     [Header("Animation Rigging")]
     public Rig walkRig;
     public Rig armRig;
-    public Rig glideRig;
     public Rig armPluckRig;
+
+    [Header("Glide Settings")]
+    public GlideData glideData = new GlideData();
+    public GlideData mountainGlideData = new GlideData();
 
     [SerializeField]
     private float rigTransitionSpeed = 5f;
@@ -61,17 +65,17 @@ public partial class PlayerScript : MonoBehaviour
 
     private bool isBlockedByFastStop = false;
     private Vector3 fastStopPosition;
-    private bool fastStopBlockLeft  = false;
+    private bool fastStopBlockLeft = false;
     private bool fastStopBlockRight = false;
     public RigBuilder rigBuilder;
 
-    private const string MOVE_ANIMATION  = "Walk";
-    private const string IS_MOVING       = "IsWalking";
-    private const string IS_DRINKING     = "IsDrinking";
-    private const string IS_CASTING      = "IsCasting";
-    private const string IS_GLIDING      = "IsGlide";
-    private const string IS_CLIMBING     = "IsClimbing";
-    private const string IS_CLIMB_IDLE   = "IsClimbIdle";
+    private const string MOVE_ANIMATION = "Walk";
+    private const string IS_MOVING = "IsWalking";
+    private const string IS_DRINKING = "IsDrinking";
+    private const string IS_CASTING = "IsCasting";
+    private const string IS_GLIDING = "IsGlide";
+    private const string IS_CLIMBING = "IsClimbing";
+    private const string IS_CLIMB_IDLE = "IsClimbIdle";
     private const string IS_CLIMB_TO_TOP = "IsClimbToTop";
 
     private const string IS_NO_CROSS_WALK = "IsNoCrossWalk";
@@ -86,32 +90,29 @@ public partial class PlayerScript : MonoBehaviour
     [Header("Final Cross Setup")]
     public Transform hitAnchor;
     public Transform handTransform;
-    public Vector3   hitOffset;
-    public Vector3   hitRotationOffset;
-    public Vector3   crossOffset;
-    public Vector3   crossRotationOffset;
-
-    [Header("Glider Settings")]
-    public GameObject crossGliderGO;
+    public Vector3 hitOffset;
+    public Vector3 hitRotationOffset;
+    public Vector3 crossOffset;
+    public Vector3 crossRotationOffset;
 
     [Header("Player Health Settings")]
     [HideInInspector]
     public int maxHealth = 100;
-    public int   currentHealth;
+    public int currentHealth;
     public Image splashDamageImage;
     public float flashDuration = 0.5f;
-    public Color flashColor    = new Color(1f, 0f, 0f, 0.5f);
+    public Color flashColor = new Color(1f, 0f, 0f, 0.5f);
 
     [Header("Player Attack Settings")]
     public SphereCollider crossHitCol;
-    public LayerMask      enemyLayer;
-    public float          damageAmount = 25f;
+    public LayerMask enemyLayer;
+    public float damageAmount = 25f;
 
     [Header("Mobile Controls")]
     [SerializeField]
     private bool useMobileControls = false;
     private float mobileHorizontalInput;
-    private bool  mobileCastPressed = false;
+    private bool mobileCastPressed = false;
 
     [Header("Pull Settings")]
     private const string PULL_TRIGGER = "Pull";
@@ -119,8 +120,11 @@ public partial class PlayerScript : MonoBehaviour
     private bool canPull;
     private bool pullAnimationComplete = false;
 
-    public bool IsPulling               => isPulling;
+    public bool IsPulling => isPulling;
     public bool IsPullAnimationComplete => pullAnimationComplete;
+
+    [Header("Eat Settings")]
+    public GameObject eatBlockade;
 
     [Header("Sleep Settings")]
     public Vector3 sleepOffset;
@@ -130,11 +134,11 @@ public partial class PlayerScript : MonoBehaviour
 
     [Header("Rock Settings")]
     public GameObject crossRockGO;
-    public Vector3    rockPushInitialAngle;
-    public Vector3    rockPushAngle;
-    public float      rockRotationSpeed = 2f;
-    private bool      isRotatingRock      = false;
-    private float     rockRotationProgress = 0f;
+    public Vector3 rockPushInitialAngle;
+    public Vector3 rockPushAngle;
+    public float rockRotationSpeed = 2f;
+    private bool isRotatingRock = false;
+    private float rockRotationProgress = 0f;
 
     [Header("Pluck Settings")]
     public PluckData pluck = new PluckData();
@@ -158,15 +162,30 @@ public partial class PlayerScript : MonoBehaviour
     public LedgeZoneData secondLedgeZoneData = new LedgeZoneData();
 
     // =====================
+    // GROUNDING SETTINGS
+    // =====================
+
+    [Header("Grounding Settings")]
+    [SerializeField]
+    private float groundCheckDistance = 0.3f;
+
+    [SerializeField]
+    private float gravityForce = 20f;
+
+    [SerializeField]
+    private LayerMask groundLayer;
+    private bool isGrounded;
+
+    // =====================
     // LIFECYCLE
     // =====================
 
     private void Awake()
     {
-        glideRig.weight = 0;
-        currentHealth   = maxHealth;
-        isSleeping      = false;
-        rb              = GetComponent<Rigidbody>();
+        glideData.glideRig.weight = 0;
+        currentHealth = maxHealth;
+        isSleeping = false;
+        rb = GetComponent<Rigidbody>();
 
         if (splashDamageImage != null)
             splashDamageImage.color = Color.clear;
@@ -174,11 +193,11 @@ public partial class PlayerScript : MonoBehaviour
         lastValidPosition = transform.position;
 
         if (crossRockGO != null)
-            crossRockGO.transform.localRotation =
-                UnityEngine.Quaternion.Euler(rockPushInitialAngle);
-
-        if (drinkButton != null)
-            drinkButton.interactable = false;
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
+                rockPushInitialAngle
+            );
+        // if (drinkButton != null)
+        //     drinkButton.SetA = false;
         else
             Debug.LogWarning("Drink button reference is missing!");
     }
@@ -222,7 +241,7 @@ public partial class PlayerScript : MonoBehaviour
                 Debug.LogWarning("No Rig component assigned or found!");
         }
 
-        crossCol         = crossReferrence.GetComponent<BoxCollider>();
+        crossCol = crossReferrence.GetComponent<BoxCollider>();
         crossCol.enabled = false;
     }
 
@@ -236,7 +255,7 @@ public partial class PlayerScript : MonoBehaviour
 
         if (isNearWaterFountain)
         {
-            isMoving        = false;
+            isMoving = false;
             horizontalInput = 0f;
         }
 
@@ -246,9 +265,16 @@ public partial class PlayerScript : MonoBehaviour
         // Either ledge's no-cross state routes to no-cross movement
         bool anyNoCrossWalk = ledgeZoneData.isNoCrossWalk || secondLedgeZoneData.isNoCrossWalk;
 
-        if (!isBreathing && !isDrinking && !isCasting && !isGliding
-            && !isPulling && !climbData.isInClimbZone
-            && !mountainClimbData.isInClimbZone && !anyLedgeActive)
+        if (
+            !isBreathing
+            && !isDrinking
+            && !isCasting
+            && !isGliding
+            && !isPulling
+            && !climbData.isInClimbZone
+            && !mountainClimbData.isInClimbZone
+            && !anyLedgeActive
+        )
         {
             if (!anyNoCrossWalk)
             {
@@ -292,18 +318,53 @@ public partial class PlayerScript : MonoBehaviour
         }
 
         if (isRotatingRock == false && crossRockGO != null)
-            crossRockGO.transform.localRotation =
-                UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
+                rockPushInitialAngle
+            );
 
         if (mountainClimbData.isInClimbZone)
-            transform.rotation =
-                UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
+            transform.rotation = UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
 
         if (climbData.isInClimbZone)
-            transform.rotation =
-                UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+            transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
 
         HandlePluckRigDrop();
+    }
+
+    // =====================
+    // PHYSICS
+    // =====================
+
+    private void FixedUpdate()
+    {
+        CheckGrounded();
+        ApplyGravity();
+    }
+
+    private void CheckGrounded()
+    {
+        Vector3 rayOrigin = transform.position + Vector3.up * 0.1f;
+
+        isGrounded = Physics.Raycast(
+            rayOrigin,
+            Vector3.down,
+            groundCheckDistance + 0.1f,
+            groundLayer
+        );
+
+        Debug.DrawRay(
+            rayOrigin,
+            Vector3.down * (groundCheckDistance + 0.1f),
+            isGrounded ? Color.green : Color.red
+        );
+    }
+
+    private void ApplyGravity()
+    {
+        if (!isGrounded)
+        {
+            rb.AddForce(Vector3.down * gravityForce, ForceMode.Acceleration);
+        }
     }
 
     // =====================
@@ -336,9 +397,7 @@ public partial class PlayerScript : MonoBehaviour
 
     void HandleCastingInput()
     {
-        bool castRequested = useMobileControls
-            ? mobileCastPressed
-            : Input.GetKeyDown(KeyCode.G);
+        bool castRequested = useMobileControls ? mobileCastPressed : Input.GetKeyDown(KeyCode.G);
 
         if (castRequested && !isCasting && !isBreathing && !isDrinking && !isGliding)
             StartCasting();
@@ -348,9 +407,14 @@ public partial class PlayerScript : MonoBehaviour
 
     void HandleDrinkingInput()
     {
-        if (Input.GetKeyDown(KeyCode.K)
+        if (
+            Input.GetKeyDown(KeyCode.K)
             && isNearWaterFountain
-            && !isDrinking && !isCasting && !isBreathing && !isGliding)
+            && !isDrinking
+            && !isCasting
+            && !isBreathing
+            && !isGliding
+        )
             StartDrinking();
     }
 
@@ -380,8 +444,10 @@ public partial class PlayerScript : MonoBehaviour
             Vector3 intendedPosition =
                 transform.position + moveDirection * currentSpeed * Time.deltaTime;
 
-            if (isBlockedByRock    && IsMovingTowardRock(intendedPosition))          return;
-            if (isBlockedByFastStop && IsBlockedByFastStopDirection(horizontalInput)) return;
+            if (isBlockedByRock && IsMovingTowardRock(intendedPosition))
+                return;
+            if (isBlockedByFastStop && IsBlockedByFastStopDirection(horizontalInput))
+                return;
 
             lastValidPosition = transform.position;
             transform.Translate(moveDirection * currentSpeed * Time.deltaTime, Space.World);
@@ -390,15 +456,23 @@ public partial class PlayerScript : MonoBehaviour
 
     private bool IsMovingTowardRock(Vector3 intendedPosition)
     {
-        Vector3 currentToRock  = rockObstaclePosition - transform.position;
+        Vector3 currentToRock = rockObstaclePosition - transform.position;
         Vector3 intendedToRock = rockObstaclePosition - intendedPosition;
         return intendedToRock.sqrMagnitude < currentToRock.sqrMagnitude;
     }
 
     private bool IsBlockedByFastStopDirection(float input)
     {
-        if (input < 0 && fastStopBlockLeft)  { Debug.Log("FastStop blocking LEFT");  return true; }
-        if (input > 0 && fastStopBlockRight) { Debug.Log("FastStop blocking RIGHT"); return true; }
+        if (input < 0 && fastStopBlockLeft)
+        {
+            Debug.Log("FastStop blocking LEFT");
+            return true;
+        }
+        if (input > 0 && fastStopBlockRight)
+        {
+            Debug.Log("FastStop blocking RIGHT");
+            return true;
+        }
         return false;
     }
 
@@ -406,12 +480,16 @@ public partial class PlayerScript : MonoBehaviour
     {
         if (isMoving)
         {
-            Quaternion targetRotation = horizontalInput < 0
-                ? UnityEngine.Quaternion.Euler(0, 180, 0)
-                : UnityEngine.Quaternion.Euler(0, 0, 0);
+            Quaternion targetRotation =
+                horizontalInput < 0
+                    ? UnityEngine.Quaternion.Euler(0, 180, 0)
+                    : UnityEngine.Quaternion.Euler(0, 0, 0);
 
             transform.rotation = UnityEngine.Quaternion.Lerp(
-                transform.rotation, targetRotation, smoothRotation * Time.deltaTime);
+                transform.rotation,
+                targetRotation,
+                smoothRotation * Time.deltaTime
+            );
         }
     }
 
@@ -421,7 +499,8 @@ public partial class PlayerScript : MonoBehaviour
 
     void HandleAnimation()
     {
-        if (animator == null) return;
+        if (animator == null)
+            return;
 
         bool anyNoCrossWalk = ledgeZoneData.isNoCrossWalk || secondLedgeZoneData.isNoCrossWalk;
         animator.SetBool(IS_MOVING, isMoving && !anyNoCrossWalk);
@@ -429,28 +508,38 @@ public partial class PlayerScript : MonoBehaviour
 
     void HandleRigWeight()
     {
-        if (walkRig == null || armRig == null || glideRig == null) return;
+        if (walkRig == null || armRig == null || glideData.glideRig == null)
+            return;
 
-        targetRigWeight = (
-            isBreathing
-            || isDrinking
-            || isCasting
-            || isGliding
-            || isPulling
-            || isSleeping
-            || pluck.isPlucking
-            || climbData.isInClimbZone
-            || mountainClimbData.isInClimbZone
-            || ledgeZoneData.isLedgeActive
-            || ledgeZoneData.isNoCrossWalk
-            || secondLedgeZoneData.isLedgeActive
-            || secondLedgeZoneData.isNoCrossWalk)
-            ? 0f : 1f;
+        targetRigWeight =
+            (
+                isBreathing
+                || isDrinking
+                || isCasting
+                || isGliding
+                || isPulling
+                || isSleeping
+                || pluck.isPlucking
+                || climbData.isInClimbZone
+                || mountainClimbData.isInClimbZone
+                || ledgeZoneData.isLedgeActive
+                || ledgeZoneData.isNoCrossWalk
+                || secondLedgeZoneData.isLedgeActive
+                || secondLedgeZoneData.isNoCrossWalk
+            )
+                ? 0f
+                : 1f;
 
         walkRig.weight = Mathf.Lerp(
-            walkRig.weight, targetRigWeight, Time.deltaTime * rigTransitionSpeed);
+            walkRig.weight,
+            targetRigWeight,
+            Time.deltaTime * rigTransitionSpeed
+        );
         armRig.weight = Mathf.Lerp(
-            armRig.weight,  targetRigWeight, Time.deltaTime * rigTransitionSpeed);
+            armRig.weight,
+            targetRigWeight,
+            Time.deltaTime * rigTransitionSpeed
+        );
     }
 
     // =====================
@@ -460,21 +549,23 @@ public partial class PlayerScript : MonoBehaviour
     public void OnFastStopTriggerEnter(Vector3 stopPosition, bool blockLeft, bool blockRight)
     {
         isBlockedByFastStop = true;
-        fastStopPosition    = stopPosition;
-        fastStopBlockLeft   = blockLeft;
-        fastStopBlockRight  = blockRight;
+        fastStopPosition = stopPosition;
+        fastStopBlockLeft = blockLeft;
+        fastStopBlockRight = blockRight;
 
-        string dir = (blockLeft && blockRight) ? "BOTH"
-                   : blockLeft  ? "LEFT"
-                   : blockRight ? "RIGHT" : "NONE";
+        string dir =
+            (blockLeft && blockRight) ? "BOTH"
+            : blockLeft ? "LEFT"
+            : blockRight ? "RIGHT"
+            : "NONE";
         Debug.Log($"Entered FastStop zone - Blocking: {dir}");
     }
 
     public void OnFastStopTriggerExit()
     {
         isBlockedByFastStop = false;
-        fastStopBlockLeft   = false;
-        fastStopBlockRight  = false;
+        fastStopBlockLeft = false;
+        fastStopBlockRight = false;
         Debug.Log("Exited FastStop zone");
     }
 
@@ -484,18 +575,19 @@ public partial class PlayerScript : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
-        if (!other.CompareTag("ActionTrigger")) return;
+        if (!other.CompareTag("ActionTrigger"))
+            return;
 
         if (other.name == "Water Fountain")
         {
-            isNearWaterFountain  = true;
+            isNearWaterFountain = true;
             currentWaterFountain = other.gameObject;
             Debug.Log("Near water fountain - Press K to drink");
             canvasTrigger = other.GetComponent<CanvasTrigger>();
             canvasTrigger?.ActivateCanvas();
 
             if (drinkButton != null)
-                drinkButton.interactable = true;
+                drinkButton.gameObject.SetActive(true);
         }
     }
 
@@ -503,12 +595,12 @@ public partial class PlayerScript : MonoBehaviour
     {
         if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
         {
-            isNearWaterFountain  = false;
+            isNearWaterFountain = false;
             currentWaterFountain = null;
             Debug.Log("Left water fountain area");
 
             if (drinkButton != null)
-                drinkButton.interactable = false;
+                drinkButton.gameObject.SetActive(false);
         }
     }
 
@@ -533,11 +625,30 @@ public partial class PlayerScript : MonoBehaviour
     // MOBILE CALLBACKS
     // =====================
 
-    public void OnMoveLeftDown()   { mobileHorizontalInput = -1f; }
-    public void OnMoveRightDown()  { mobileHorizontalInput =  1f; }
-    public void OnMoveButtonUp()   { mobileHorizontalInput =  0f; }
-    public void OnCastButtonDown() { mobileCastPressed = true;    }
-    public void OnCastButtonUp()   { mobileCastPressed = false;   }
+    public void OnMoveLeftDown()
+    {
+        mobileHorizontalInput = -1f;
+    }
+
+    public void OnMoveRightDown()
+    {
+        mobileHorizontalInput = 1f;
+    }
+
+    public void OnMoveButtonUp()
+    {
+        mobileHorizontalInput = 0f;
+    }
+
+    public void OnCastButtonDown()
+    {
+        mobileCastPressed = true;
+    }
+
+    public void OnCastButtonUp()
+    {
+        mobileCastPressed = false;
+    }
 
     // =====================
     // UTILITIES
@@ -545,10 +656,10 @@ public partial class PlayerScript : MonoBehaviour
 
     void DisableAllMovements()
     {
-        isMoving  = false;
+        isMoving = false;
         isCasting = false;
         isDrinking = false;
-        isPulling  = false;
+        isPulling = false;
         isSleeping = false;
         pluck.Reset();
         pullAnimationComplete = false;
@@ -560,15 +671,17 @@ public partial class PlayerScript : MonoBehaviour
 
     void HandleRockRotation()
     {
-        if (!isRotatingRock || crossRockGO == null) return;
+        if (!isRotatingRock || crossRockGO == null)
+            return;
 
         rockRotationProgress += Time.deltaTime * rockRotationSpeed;
-        rockRotationProgress  = Mathf.Clamp01(rockRotationProgress);
+        rockRotationProgress = Mathf.Clamp01(rockRotationProgress);
 
         crossRockGO.transform.localRotation = UnityEngine.Quaternion.Lerp(
             UnityEngine.Quaternion.Euler(rockPushInitialAngle),
             UnityEngine.Quaternion.Euler(rockPushAngle),
-            rockRotationProgress);
+            rockRotationProgress
+        );
     }
 
     // =====================
@@ -579,17 +692,17 @@ public partial class PlayerScript : MonoBehaviour
 
     public void OnRockObstacleTriggerEnter(Vector3 rockPosition)
     {
-        isBlockedByRock      = true;
+        isBlockedByRock = true;
         rockObstaclePosition = rockPosition;
-        canPull              = true;
+        canPull = true;
         Debug.Log("Near rock obstacle - Can now pull");
     }
 
     public void OnRockObstacleTriggerExit()
     {
-        isBlockedByRock      = false;
-        canPull              = false;
-        isPulling            = false;
+        isBlockedByRock = false;
+        canPull = false;
+        isPulling = false;
         pullAnimationComplete = false;
 
         ResetRockRotation();
@@ -605,9 +718,9 @@ public partial class PlayerScript : MonoBehaviour
 
     public void OnRockObstacleComplete()
     {
-        isBlockedByRock      = false;
-        canPull              = false;
-        isPulling            = false;
+        isBlockedByRock = false;
+        canPull = false;
+        isPulling = false;
         pullAnimationComplete = false;
 
         ResetRockRotation();
@@ -618,6 +731,9 @@ public partial class PlayerScript : MonoBehaviour
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
             crossReferrence.SetActive(true);
 
+        if (pullButton != null)
+            pullButton.gameObject.SetActive(false);
+
         Debug.Log("Rock obstacle cleared");
     }
 
@@ -625,8 +741,8 @@ public partial class PlayerScript : MonoBehaviour
     {
         if (canPull && !isDrinking && !isCasting && !isGliding && !isBreathing)
         {
-            isPulling            = true;
-            isMoving             = false;
+            isPulling = true;
+            isMoving = false;
             pullAnimationComplete = false;
 
             animator.SetTrigger(PULL_TRIGGER);
@@ -638,10 +754,14 @@ public partial class PlayerScript : MonoBehaviour
             }
 
             Debug.Log("Pull triggered");
+            pullButton.interactable = false;
         }
     }
 
-    public void OnPullButtonUp()   { Debug.Log("Pull button released"); }
+    public void OnPullButtonUp()
+    {
+        Debug.Log("Pull button released");
+    }
 
     public void OnPullButtonPressed()
     {
@@ -649,30 +769,30 @@ public partial class PlayerScript : MonoBehaviour
             StartPulling();
     }
 
-    void HandlePulling() { }
-
     void StartPulling()
     {
         isPulling = true;
-        isMoving  = false;
+        isMoving = false;
         Debug.Log("Started pulling");
     }
 
     private void StartRockRotation()
     {
-        isRotatingRock       = true;
+        isRotatingRock = true;
         rockRotationProgress = 0f;
     }
 
     public void ResetRockRotation()
     {
         Debug.Log("Resetting rock rotation");
-        isRotatingRock       = false;
+        isRotatingRock = false;
         rockRotationProgress = 0f;
+        pullButton.interactable = true;
 
         if (crossRockGO != null)
-            crossRockGO.transform.localRotation =
-                UnityEngine.Quaternion.Euler(rockPushInitialAngle);
+            crossRockGO.transform.localRotation = UnityEngine.Quaternion.Euler(
+                rockPushInitialAngle
+            );
     }
 
     public void AnimationEvent_PullHit()
@@ -693,6 +813,7 @@ public partial class PlayerScript : MonoBehaviour
             crossReferrence.SetActive(true);
 
         Debug.Log("Pull animation ended");
+        // pullButton.interactable = true;
     }
 
     public void ResetPullCompletion()
@@ -702,108 +823,6 @@ public partial class PlayerScript : MonoBehaviour
 
     #endregion
 
-    // =====================
-    // OASIS / SAIL
-    // =====================
-
-    #region SAIL PARAMS
-
-    public void OasisZoneOnTrigger(CameraTrigger ct)
-    {
-        if (!isDrinking && !isBreathing && !isCasting)
-        {
-            StartSail();
-            ct.enableEvents?.Invoke();
-            sailData.sailCross.GetComponent<GlideTrigger>().IsPlayerGliding = true;
-        }
-    }
-
-    public void OasisZoneOnExitTrigger(CameraTrigger ct)
-    {
-        if (!isDrinking && !isBreathing && !isCasting)
-        {
-            StopSail();
-            ct.disableEvents?.Invoke();
-            sailData.sailCross.GetComponent<GlideTrigger>().IsPlayerGliding = false;
-        }
-    }
-
-    public void StartSail()
-    {
-        sailData.isSailing = true;
-        animator.SetBool(IS_GLIDING, true);
-        isMoving = false;
-        crossReferrence.SetActive(false);
-        InitSail();
-    }
-
-    public void StopSail()
-    {
-        sailData.isSailing    = false;
-        this.transform.parent = null;
-        animator.SetBool(IS_GLIDING, false);
-        crossReferrence.SetActive(true);
-        sailData.sailCross.SetActive(false);
-    }
-
-    void InitSail()
-    {
-        sailData.sailCross.SetActive(true);
-        this.transform.SetParent(sailData.sailCross.transform);
-        glideRig.weight = 1;
-    }
-
-    #endregion
-
-    // =====================
-    // GLIDING
-    // =====================
-
-    #region GLIDING
-
-    public void GlideZoneOnTrigger(CameraTrigger ct)
-    {
-        if (!isDrinking && !isBreathing && !isCasting)
-        {
-            StartGliding();
-            ct.enableEvents?.Invoke();
-            crossGliderGO.GetComponent<GlideTrigger>().IsPlayerGliding = true;
-        }
-    }
-
-    public void StartGliding()
-    {
-        isGliding = true;
-        animator.SetBool(IS_GLIDING, true);
-        isMoving = false;
-        crossReferrence.SetActive(false);
-        InitGlider();
-    }
-
-    public void StopGliding()
-    {
-        isGliding             = false;
-        this.transform.parent = null;
-        animator.SetBool(IS_GLIDING, false);
-        glideRig.weight = 0;
-
-        crossReferrence.SetActive(true);
-        crossReferrence.transform.SetParent(handTransform);
-        crossReferrence.transform.localPosition = initialTransformCrossOffset;
-        crossReferrence.transform.localRotation =
-            UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
-
-        crossGliderGO.SetActive(false);
-    }
-
-    void InitGlider()
-    {
-        crossGliderGO.SetActive(true);
-        this.transform.SetParent(crossGliderGO.transform);
-        glideRig.weight = 1;
-    }
-
-    #endregion
 
     // =====================
     // CASTING ANIMATION EVENTS
@@ -815,8 +834,7 @@ public partial class PlayerScript : MonoBehaviour
     {
         crossReferrence.transform.SetParent(hitAnchor);
         crossReferrence.transform.localPosition = hitOffset;
-        crossReferrence.transform.localRotation =
-            UnityEngine.Quaternion.Euler(hitRotationOffset);
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(hitRotationOffset);
     }
 
     public void AnimationEvent_CastFX()
@@ -830,12 +848,13 @@ public partial class PlayerScript : MonoBehaviour
         CheckAndDamageEnemies();
 
         crossCol.enabled = false;
-        isCasting        = false;
+        isCasting = false;
         animator.SetBool(IS_CASTING, false);
         crossReferrence.transform.SetParent(handTransform);
         crossReferrence.transform.localPosition = initialTransformCrossOffset;
-        crossReferrence.transform.localRotation =
-            UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
+        crossReferrence.transform.localRotation = UnityEngine.Quaternion.Euler(
+            initialRotationCrossOffset
+        );
     }
 
     private void CheckAndDamageEnemies()
@@ -849,7 +868,8 @@ public partial class PlayerScript : MonoBehaviour
         Collider[] hitColliders = Physics.OverlapSphere(
             crossHitCol.transform.position,
             crossHitCol.radius * crossHitCol.transform.lossyScale.x,
-            enemyLayer);
+            enemyLayer
+        );
 
         if (hitColliders.Length > 0)
         {
@@ -868,12 +888,15 @@ public partial class PlayerScript : MonoBehaviour
                     if (enemyHealth != null)
                     {
                         enemyHealth.TakeDamage(damageAmount);
-                        Debug.Log($"Dealt {damageAmount} damage to {enemyCollider.gameObject.name}");
+                        Debug.Log(
+                            $"Dealt {damageAmount} damage to {enemyCollider.gameObject.name}"
+                        );
                     }
                     else
                     {
                         Debug.LogWarning(
-                            $"Enemy {enemyCollider.gameObject.name} has no damage component!");
+                            $"Enemy {enemyCollider.gameObject.name} has no damage component!"
+                        );
                     }
                 }
             }
@@ -895,7 +918,7 @@ public partial class PlayerScript : MonoBehaviour
     public void EnterSandStorm()
     {
         stormData.isInStorm = true;
-        animator.speed      = 0.4f;
+        animator.speed = 0.4f;
         stormData.Reset();
         Debug.Log("Player entered sandstorm");
     }
@@ -906,7 +929,7 @@ public partial class PlayerScript : MonoBehaviour
             item.SetActive(false);
 
         stormData.isInStorm = false;
-        animator.speed      = 1f;
+        animator.speed = 1f;
         stormData.Reset();
         Debug.Log("Player exited sandstorm");
     }
@@ -919,8 +942,9 @@ public partial class PlayerScript : MonoBehaviour
             return;
 
         stormData.stormCross.transform.localPosition = stormData.stormCrossTransformOffset;
-        stormData.stormCross.transform.localRotation =
-            UnityEngine.Quaternion.Euler(stormData.stormCrossTransformRotationOffset);
+        stormData.stormCross.transform.localRotation = UnityEngine.Quaternion.Euler(
+            stormData.stormCrossTransformRotationOffset
+        );
 
         stormData.isCrossStanding = true;
         StartCoroutine(StormRoutine(stormData.timeTakenForStomeToBlowOver));
@@ -942,8 +966,9 @@ public partial class PlayerScript : MonoBehaviour
         stormData.stormObject3.SetActive(false);
 
         stormData.stormCross.transform.localPosition = initialTransformCrossOffset;
-        stormData.stormCross.transform.localRotation =
-            UnityEngine.Quaternion.Euler(initialRotationCrossOffset);
+        stormData.stormCross.transform.localRotation = UnityEngine.Quaternion.Euler(
+            initialRotationCrossOffset
+        );
 
         ExitSandStorm();
         StopAllCoroutines();
@@ -951,22 +976,26 @@ public partial class PlayerScript : MonoBehaviour
 
     IEnumerator StormShake(float x)
     {
-        CameraShake.Instance.ShakeHeavy(); yield return new WaitForSeconds(x);
-        CameraShake.Instance.ShakeHeavy(); yield return new WaitForSeconds(x);
-        CameraShake.Instance.ShakeHeavy(); yield return new WaitForSeconds(x);
+        CameraShake.Instance.ShakeHeavy();
+        yield return new WaitForSeconds(x);
+        CameraShake.Instance.ShakeHeavy();
+        yield return new WaitForSeconds(x);
+        CameraShake.Instance.ShakeHeavy();
+        yield return new WaitForSeconds(x);
         CameraShake.Instance.ShakeHeavy();
     }
 
     void HandleStorm()
     {
-        if (!stormData.isInStorm) return;
+        if (!stormData.isInStorm)
+            return;
 
         bool playerIsMoving = Mathf.Abs(horizontalInput) > 0.01f;
         animator.speed = 0.4f;
 
         if (playerIsMoving)
         {
-            stormData.idleTimer          = 0f;
+            stormData.idleTimer = 0f;
             stormData.currentPushbackForce = 0f;
         }
         else
@@ -978,12 +1007,14 @@ public partial class PlayerScript : MonoBehaviour
                 stormData.currentPushbackForce = Mathf.MoveTowards(
                     stormData.currentPushbackForce,
                     stormData.maxPushbackForce,
-                    stormData.pushbackAcceleration * Time.deltaTime);
+                    stormData.pushbackAcceleration * Time.deltaTime
+                );
 
                 Vector3 pushDirection = new Vector3(0, 0, stormData.pushbackDirection);
                 transform.Translate(
                     pushDirection * stormData.currentPushbackForce * Time.deltaTime,
-                    Space.World);
+                    Space.World
+                );
                 Debug.Log($"Storm pushback: {stormData.currentPushbackForce:F2}");
             }
         }
@@ -1000,7 +1031,7 @@ public partial class PlayerScript : MonoBehaviour
     public void AfterEnterSandStorm()
     {
         stormData.isInStorm = true;
-        animator.speed      = 0.4f;
+        animator.speed = 0.4f;
         stormData.Reset();
         Debug.Log("Player entered sandstorm");
     }
@@ -1016,7 +1047,8 @@ public partial class PlayerScript : MonoBehaviour
     public void OnDamagedTaken(float damage)
     {
         currentHealth -= (int)damage;
-        if (currentHealth < 0) currentHealth = 0;
+        if (currentHealth < 0)
+            currentHealth = 0;
 
         Debug.Log($"Player took {damage} damage. Health: {currentHealth}/{maxHealth}");
 
@@ -1039,8 +1071,7 @@ public partial class PlayerScript : MonoBehaviour
         {
             elapsedTime += Time.deltaTime;
             float alpha = Mathf.Lerp(flashColor.a, 0f, elapsedTime / flashDuration);
-            splashDamageImage.color =
-                new Color(flashColor.r, flashColor.g, flashColor.b, alpha);
+            splashDamageImage.color = new Color(flashColor.r, flashColor.g, flashColor.b, alpha);
             yield return null;
         }
 
@@ -1067,21 +1098,21 @@ public interface IDamageable
 [System.Serializable]
 public class PluckData
 {
-    public int   hitScore    = 0;
-    public int   maxHitScore = 6;
-    public bool  isInPluckZone = false;
-    public bool  isPlucking    = false;
-    public bool  isPluckRigUp  = false;
-    public float rigFallSpeed  = 2f;
-    public bool  isEating      = false;
-    public bool  hasTakenFruit = false;
+    public int hitScore = 0;
+    public int maxHitScore = 6;
+    public bool isInPluckZone = false;
+    public bool isPlucking = false;
+    public bool isPluckRigUp = false;
+    public float rigFallSpeed = 2f;
+    public bool isEating = false;
+    public bool hasTakenFruit = false;
 
-    public Button     pluckButton;
-    public Button     eatButton;
+    public Button pluckButton;
+    public Button eatButton;
     public GameObject apple;
 
-    public Vector3    crossPluckOffset;
-    public Vector3    crossPluckRotationOffset;
+    public Vector3 crossPluckOffset;
+    public Vector3 crossPluckRotationOffset;
     public GameObject blockade;
 
     [HideInInspector]
@@ -1089,21 +1120,31 @@ public class PluckData
 
     public const string IS_PLUCK = "isPluck";
 
-    public void Reset()   { isPlucking = false; isPluckRigUp = false; }
-    public void ExitZone(){ isInPluckZone = false; currentPluckZone = null; Reset(); }
+    public void Reset()
+    {
+        isPlucking = false;
+        isPluckRigUp = false;
+    }
+
+    public void ExitZone()
+    {
+        isInPluckZone = false;
+        currentPluckZone = null;
+        Reset();
+    }
 }
 
 [System.Serializable]
 public class SailData
 {
-    public bool       isSailing = false;
+    public bool isSailing = false;
     public GameObject sailCross;
 }
 
 [System.Serializable]
 public class StormData
 {
-    public bool       isInStorm  = false;
+    public bool isInStorm = false;
     public GameObject stormCross;
 
     [Header("Speed Settings")]
@@ -1111,26 +1152,33 @@ public class StormData
 
     [Header("Pushback Settings")]
     public float idleTimeBeforePushback = 2f;
-    public float pushbackAcceleration   = 1.5f;
-    public float maxPushbackForce       = 12f;
-    public float pushbackDirection      = -1f;
+    public float pushbackAcceleration = 1.5f;
+    public float maxPushbackForce = 12f;
+    public float pushbackDirection = -1f;
 
     [Header("Storm Settings")]
-    public GameObject   stormObject1;
-    public GameObject   stormObject2;
-    public GameObject   stormObject3;
+    public GameObject stormObject1;
+    public GameObject stormObject2;
+    public GameObject stormObject3;
     public BibleTrigger bibleTrigger;
     public GameObject[] disablePlayables;
 
-    public bool  isCrossStanding             = false;
+    public bool isCrossStanding = false;
     public float timeTakenForStomeToBlowOver = 18f;
     public Vector3 stormCrossTransformOffset;
     public Vector3 stormCrossTransformRotationOffset;
 
-    [HideInInspector] public float currentPushbackForce = 0f;
-    [HideInInspector] public float idleTimer            = 0f;
+    [HideInInspector]
+    public float currentPushbackForce = 0f;
 
-    public void Reset() { currentPushbackForce = 0f; idleTimer = 0f; }
+    [HideInInspector]
+    public float idleTimer = 0f;
+
+    public void Reset()
+    {
+        currentPushbackForce = 0f;
+        idleTimer = 0f;
+    }
 }
 
 [System.Serializable]
@@ -1149,15 +1197,15 @@ public class ClimbData
     public Transform exitSnapTarget;
 
     [Header("State — read only at runtime")]
-    public bool isInClimbZone    = false;
+    public bool isInClimbZone = false;
     public bool isPlayerClimbing = false;
-    public bool isHoldingClimb   = false;
-    public bool hasReachedTop    = false;
+    public bool isHoldingClimb = false;
+    public bool hasReachedTop = false;
 
     [Header("Ladder Alignment")]
     public Transform ladderTransform;
-    public Vector3   ladderAlignOffset;
-    public Vector3   climbSnapRotation;
+    public Vector3 ladderAlignOffset;
+    public Vector3 climbSnapRotation;
 }
 
 [System.Serializable]
@@ -1176,28 +1224,44 @@ public class MountainClimbData
     public Transform exitSnapTarget;
 
     [Header("State — read only at runtime")]
-    public bool isInClimbZone    = false;
+    public bool isInClimbZone = false;
     public bool isPlayerClimbing = false;
-    public bool isHoldingClimb   = false;
-    public bool hasReachedTop    = false;
+    public bool isHoldingClimb = false;
+    public bool hasReachedTop = false;
 
     [Header("Ladder Alignment")]
     public Transform ladderTransform;
-    public Vector3   ladderAlignOffset;
-    public Vector3   climbSnapRotation;
+    public Vector3 ladderAlignOffset;
+    public Vector3 climbSnapRotation;
 }
 
 [System.Serializable]
 public class LedgeZoneData
 {
-    public Button     ledgeBtn;
+    public Button ledgeBtn;
     public GameObject crossLedge;
     public GameObject crossLedgeDefault;
     public GameObject blockade;
     public GameObject descriptiveCanvas;
-    public Vector3    crossLedgeFinalPosition;
+    public Vector3 crossLedgeFinalPosition;
 
-    public bool isLedgeActive   = false;
+    public bool isLedgeActive = false;
     public bool isLedgeFinished = false;
-    public bool isNoCrossWalk   = false;
+    public bool isNoCrossWalk = false;
+}
+
+[System.Serializable]
+public class GlideData
+{
+    [Header("ID")]
+    public string id = "default"; // e.g. "glide1", "mountain", "oasis"
+
+    [Header("Glider Cross")]
+    public GameObject gliderCross;
+
+    [Header("Rig")]
+    public Rig glideRig;
+
+    [Header("State — read only at runtime")]
+    public bool isGliding = false;
 }

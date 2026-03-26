@@ -48,6 +48,7 @@ public class SleepTrigger : MonoBehaviour
      public UnityEvent onEventExecution;
      public UnityEvent disableEvents;
      public UnityEvent OnSleepingFinish;
+     
 
     void Start()
     {

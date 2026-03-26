@@ -6,79 +6,58 @@ public class FastStopUtils : MonoBehaviour
     public bool isFastStoppingRight = false;
 
     private PlayerScript playerScript;
+    private PostSleepPlayerScript postSleepPlayerScript;
+
     private bool isPlayerInTrigger = false;
 
     void Start()
     {
-        // Find the player in the scene
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player != null)
         {
             playerScript = player.GetComponent<PlayerScript>();
+            postSleepPlayerScript = player.GetComponent<PostSleepPlayerScript>();
+
             if (playerScript == null)
-            {
-                Debug.LogWarning("PlayerScript component not found on Player!");
-            }
+                Debug.LogWarning("FastStopUtils: No PlayerScript found on Player!");
+            if (postSleepPlayerScript == null)
+                Debug.LogWarning("FastStopUtils: No PostSleepPlayerScript found on Player!");
         }
         else
         {
-            Debug.LogWarning("Player GameObject not found in scene!");
-        }
-    }
-
-    void Update()
-    {
-        // Continuously check if player should be blocked while in trigger
-        if (isPlayerInTrigger && playerScript != null)
-        {
-            // This ensures the blocking persists even if player tries to move
-            CheckAndBlockPlayer();
+            Debug.LogWarning("FastStopUtils: Player GameObject not found in scene!");
         }
     }
 
     void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Player"))
-        {
-            isPlayerInTrigger = true;
+        if (!other.CompareTag("Player"))
+            return;
 
-            if (playerScript == null)
-            {
-                playerScript = other.GetComponent<PlayerScript>();
-            }
+        isPlayerInTrigger = true;
 
-            if (playerScript != null)
-            {
-                // Call the player's obstacle method similar to RockObstacle
-                playerScript.OnFastStopTriggerEnter(
-                    transform.position,
-                    isFastStoppingLeft,
-                    isFastStoppingRight
-                );
+        // Lazy-fetch in case Start() ran before player was ready
+        if (playerScript == null)
+            playerScript = other.GetComponent<PlayerScript>();
+        if (postSleepPlayerScript == null)
+            postSleepPlayerScript = other.GetComponent<PostSleepPlayerScript>();
 
-                Debug.Log($"Player entered FastStop zone - Left: {isFastStoppingLeft}, Right: {isFastStoppingRight}");
-            }
-        }
+        playerScript?.OnFastStopTriggerEnter(transform.position, isFastStoppingLeft, isFastStoppingRight);
+        postSleepPlayerScript?.OnFastStopTriggerEnter(transform.position, isFastStoppingLeft, isFastStoppingRight);
+
+        Debug.Log($"FastStop entered — Left: {isFastStoppingLeft}, Right: {isFastStoppingRight}");
     }
 
     void OnTriggerExit(Collider other)
     {
-        if (other.CompareTag("Player"))
-        {
-            isPlayerInTrigger = false;
+        if (!other.CompareTag("Player"))
+            return;
 
-            if (playerScript != null)
-            {
-                // Notify player they left the fast stop zone
-                playerScript.OnFastStopTriggerExit();
-                Debug.Log("Player exited FastStop zone - can move freely");
-            }
-        }
-    }
+        isPlayerInTrigger = false;
 
-    private void CheckAndBlockPlayer()
-    {
-        // Additional runtime check if needed
-        // This can be used for dynamic blocking logic
+        playerScript?.OnFastStopTriggerExit();
+        postSleepPlayerScript?.OnFastStopTriggerExit();
+
+        Debug.Log("FastStop exited — player can move freely");
     }
 }

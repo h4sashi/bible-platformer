@@ -67,9 +67,8 @@ public class PostSleepPlayerScript : MonoBehaviour
     private bool isPickingFruit;
     private bool isActive = false;
 
-     [Header("Movement Settings")]
-     public GameObject blockade;
-
+    [Header("Movement Settings")]
+    public GameObject blockade;
 
     // Water fountain
 
@@ -77,6 +76,11 @@ public class PostSleepPlayerScript : MonoBehaviour
     public RigBuilder rig;
 
     public GameObject standingCross;
+
+    private bool isBlockedByFastStop = false;
+    private Vector3 fastStopPosition;
+    private bool fastStopBlockLeft = false;
+    private bool fastStopBlockRight = false;
 
     void Awake()
     {
@@ -151,57 +155,60 @@ public class PostSleepPlayerScript : MonoBehaviour
     // DEACTIVATION — called after drinking completes
     // =============================================
 
-   private void Deactivate()
-{
-    isActive = false;
-    mobileHorizontalInput = 0f;
-    blockade.SetActive(false);
-
-    if (buttonPlayerCanvas != null && buttonSleepCanvas != null)
+    private void Deactivate()
     {
-        playerMoveControl.SetActive(true);
-        buttonPlayerCanvas.SetActive(true);
-        buttonSleepCanvas.SetActive(false);
-        playerSleepControl.SetActive(false);
+        isActive = false;
+        mobileHorizontalInput = 0f;
+        blockade.SetActive(false);
+
+        if (buttonPlayerCanvas != null && buttonSleepCanvas != null)
+        {
+            playerMoveControl.SetActive(true);
+            buttonPlayerCanvas.SetActive(true);
+            buttonSleepCanvas.SetActive(false);
+            playerSleepControl.SetActive(false);
+        }
+
+        if (animator != null && originalController != null)
+            animator.runtimeAnimatorController = originalController;
+
+        if (playerScript != null)
+            playerScript.enabled = true;
+
+        // Restore cross to correct parent and transform
+        crossReferrence.transform.SetParent(playerScript.handTransform);
+        crossReferrence.transform.localPosition = playerScript.initialTransformCrossOffset;
+        crossReferrence.transform.localRotation = Quaternion.Euler(
+            playerScript.initialRotationCrossOffset
+        );
+        crossReferrence.SetActive(true);
+
+        standingCross.SetActive(false);
+
+        // Rebind animator to force IK constraints to reattach
+        StartCoroutine(RebindRig());
+
+        Debug.Log("PostSleepPlayerScript deactivated — original controller restored");
     }
 
-    if (animator != null && originalController != null)
-        animator.runtimeAnimatorController = originalController;
+    private IEnumerator RebindRig()
+    {
+        // Wait one frame for the controller swap to settle
+        yield return null;
 
-    if (playerScript != null)
-        playerScript.enabled = true;
+        animator.Rebind();
+        animator.Update(0f);
 
-    // Restore cross to correct parent and transform
-    crossReferrence.transform.SetParent(playerScript.handTransform);
-    crossReferrence.transform.localPosition = playerScript.initialTransformCrossOffset;
-    crossReferrence.transform.localRotation = Quaternion.Euler(playerScript.initialRotationCrossOffset);
-    crossReferrence.SetActive(true);
+        playerScript.walkRig.weight = 1f;
+        playerScript.armRig.weight = 1f;
+        playerScript.targetRigWeight = 1f;
 
-    standingCross.SetActive(false);
+        rig.enabled = true;
+        rig.Build();
 
-    // Rebind animator to force IK constraints to reattach
-    StartCoroutine(RebindRig());
+        Debug.Log("Rig rebound and rebuilt");
+    }
 
-    Debug.Log("PostSleepPlayerScript deactivated — original controller restored");
-}
-
-private IEnumerator RebindRig()
-{
-    // Wait one frame for the controller swap to settle
-    yield return null;
-
-    animator.Rebind();
-    animator.Update(0f);
-
-    playerScript.walkRig.weight = 1f;
-    playerScript.armRig.weight = 1f;
-    playerScript.targetRigWeight = 1f;
-
-    rig.enabled = true;
-    rig.Build();
-
-    Debug.Log("Rig rebound and rebuilt");
-}
     // =============================================
     // CROW FLY AWAY — triggers on first movement
     // =============================================
@@ -264,14 +271,33 @@ private IEnumerator RebindRig()
         isMoving = Mathf.Abs(horizontalInput) > 0.01f;
     }
 
-    void HandleMovement()
+    private bool IsBlockedByFastStopDirection(float input)
     {
-        if (!isMoving)
-            return;
-
-        Vector3 moveDirection = new Vector3(0, 0, horizontalInput);
-        transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
+        if (input < 0 && fastStopBlockLeft)
+        {
+            Debug.Log("FastStop blocking LEFT");
+            return true;
+        }
+        if (input > 0 && fastStopBlockRight)
+        {
+            Debug.Log("FastStop blocking RIGHT");
+            return true;
+        }
+        return false;
     }
+
+    void HandleMovement()
+{
+    if (!isMoving)
+        return;
+
+    // Check block BEFORE translating, matching PlayerScript behaviour
+    if (isBlockedByFastStop && IsBlockedByFastStopDirection(horizontalInput))
+        return;
+
+    Vector3 moveDirection = new Vector3(0, 0, horizontalInput);
+    transform.Translate(moveDirection * moveSpeed * Time.deltaTime, Space.World);
+}
 
     void HandleRotation()
     {
@@ -385,6 +411,7 @@ private IEnumerator RebindRig()
         animator.SetBool(PICK_FRUIT, false); // explicitly stop the animation
         isPickingFruit = false;
         Debug.Log("PostSleep: Fruit pickup complete");
+        pickFruitButton.gameObject.SetActive(false);
         drinkButton.gameObject.SetActive(true);
     }
 
@@ -433,5 +460,32 @@ private IEnumerator RebindRig()
         {
             pickFruitButton.gameObject.SetActive(false);
         }
+    }
+
+    // =====================
+    // FAST STOP
+    // =====================
+
+    public void OnFastStopTriggerEnter(Vector3 stopPosition, bool blockLeft, bool blockRight)
+    {
+        isBlockedByFastStop = true;
+        fastStopPosition = stopPosition;
+        fastStopBlockLeft = blockLeft;
+        fastStopBlockRight = blockRight;
+
+        string dir =
+            (blockLeft && blockRight) ? "BOTH"
+            : blockLeft ? "LEFT"
+            : blockRight ? "RIGHT"
+            : "NONE";
+        Debug.Log($"Entered FastStop zone - Blocking: {dir}");
+    }
+
+    public void OnFastStopTriggerExit()
+    {
+        isBlockedByFastStop = false;
+        fastStopBlockLeft = false;
+        fastStopBlockRight = false;
+        Debug.Log("Exited FastStop zone");
     }
 }
