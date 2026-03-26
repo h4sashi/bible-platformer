@@ -319,6 +319,7 @@ public partial class PlayerScript
         else
         {
             pluck.ExitZone();
+             pluck.pluckButton.gameObject.SetActive(false);
             InitRigAfterPluckCompletion();
 
             if (animator != null)
