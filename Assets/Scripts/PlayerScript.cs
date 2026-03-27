@@ -16,6 +16,7 @@ public partial class PlayerScript : MonoBehaviour
     [Header("UI Buttons")]
     public Button drinkButton;
     public Button pullButton;
+    public Button SandStormbutton;
 
     [SerializeField]
     private float smoothRotation = 10f;
@@ -175,6 +176,7 @@ public partial class PlayerScript : MonoBehaviour
     [SerializeField]
     private LayerMask groundLayer;
     private bool isGrounded;
+    private float originalMoveSpeed; // add this line
 
     // =====================
     // LIFECYCLE
@@ -184,6 +186,7 @@ public partial class PlayerScript : MonoBehaviour
     {
         glideData.glideRig.weight = 0;
         currentHealth = maxHealth;
+        originalMoveSpeed = moveSpeed;
         isSleeping = false;
         rb = GetComponent<Rigidbody>();
 
@@ -252,6 +255,7 @@ public partial class PlayerScript : MonoBehaviour
     void Update()
     {
         GetInput();
+        HandlePluckRigDrop();
 
         if (isNearWaterFountain)
         {
@@ -327,8 +331,6 @@ public partial class PlayerScript : MonoBehaviour
 
         if (climbData.isInClimbZone)
             transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
-
-        HandlePluckRigDrop();
     }
 
     // =====================
@@ -928,6 +930,7 @@ public partial class PlayerScript : MonoBehaviour
         foreach (var item in stormData.disablePlayables)
             item.SetActive(false);
 
+        SandStormbutton.gameObject.SetActive(false);
         stormData.isInStorm = false;
         animator.speed = 1f;
         stormData.Reset();
@@ -989,6 +992,13 @@ public partial class PlayerScript : MonoBehaviour
     {
         if (!stormData.isInStorm)
             return;
+
+        // Don't apply storm effects during climbing
+        if (climbData.isInClimbZone || mountainClimbData.isInClimbZone)
+        {
+            animator.speed = 1f;
+            return;
+        }
 
         bool playerIsMoving = Mathf.Abs(horizontalInput) > 0.01f;
         animator.speed = 0.4f;
@@ -1105,6 +1115,9 @@ public class PluckData
     public bool isPluckRigUp = false;
     public float rigFallSpeed = 2f;
     public bool isEating = false;
+
+    // Add this field to PluckData class
+    public bool isPluckAnimating = false; // true while animation is playing
     public bool hasTakenFruit = false;
 
     public Button pluckButton;
@@ -1124,6 +1137,7 @@ public class PluckData
     {
         isPlucking = false;
         isPluckRigUp = false;
+        isPluckAnimating = false; // add this
     }
 
     public void ExitZone()
@@ -1189,6 +1203,9 @@ public class ClimbData
     [Header("Climb Cross")]
     public GameObject crossToClimbGO;
 
+    [Header("Climb Speed")]
+    public float climbSpeed = 1.5f;
+
     [Header("Entry Snap")]
     public Vector3 positionOffset;
     public Vector3 rotationOffset;
@@ -1215,6 +1232,12 @@ public class MountainClimbData
 
     [Header("Climb Cross")]
     public GameObject crossToClimbGO;
+
+    [Header("Climb Speed")]
+    public float climbSpeed = 1.5f;
+
+    [Header("Climb Direction (normalized slope vector, e.g. 0, 0.8, 0.6 for a slope)")]
+    public Vector3 climbDirection = new Vector3(0f, 0.8f, 0.6f); // tune in Inspector
 
     [Header("Entry Snap")]
     public Vector3 positionOffset;

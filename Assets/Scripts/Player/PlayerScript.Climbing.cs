@@ -17,10 +17,15 @@ public partial class PlayerScript
         if (isDrinking || isBreathing || isCasting || isGliding || isPulling || isSleeping)
             return;
 
-        climbData.isInClimbZone    = true;
+        moveSpeed = originalMoveSpeed;
+        stormData.isInStorm = false;
+        animator.speed = 1f;
+        stormData.Reset();
+
+        climbData.isInClimbZone = true;
         climbData.isPlayerClimbing = false;
-        climbData.isHoldingClimb   = false;
-        climbData.hasReachedTop    = false;
+        climbData.isHoldingClimb = false;
+        climbData.hasReachedTop = false;
 
         isMoving = false;
         animator.applyRootMotion = true;
@@ -28,8 +33,9 @@ public partial class PlayerScript
         if (climbData.ladderTransform != null)
         {
             transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
-            transform.position = climbData.ladderTransform.position
-                               + climbData.ladderTransform.TransformDirection(climbData.ladderAlignOffset);
+            transform.position =
+                climbData.ladderTransform.position
+                + climbData.ladderTransform.TransformDirection(climbData.ladderAlignOffset);
         }
         else
         {
@@ -50,7 +56,7 @@ public partial class PlayerScript
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,   false);
+            animator.SetBool(IS_CLIMBING, false);
             animator.SetBool(IS_CLIMB_IDLE, true);
         }
 
@@ -62,13 +68,13 @@ public partial class PlayerScript
         if (!climbData.isInClimbZone || isDrinking || isCasting || isGliding || isBreathing)
             return;
 
-        climbData.isHoldingClimb   = true;
+        climbData.isHoldingClimb = true;
         climbData.isPlayerClimbing = true;
 
         if (animator != null)
         {
             animator.SetBool(IS_CLIMB_IDLE, false);
-            animator.SetBool(IS_CLIMBING,   true);
+            animator.SetBool(IS_CLIMBING, true);
         }
 
         Debug.Log("Climbing — hold to continue.");
@@ -79,12 +85,12 @@ public partial class PlayerScript
         if (!climbData.isInClimbZone || climbData.hasReachedTop)
             return;
 
-        climbData.isHoldingClimb   = false;
+        climbData.isHoldingClimb = false;
         climbData.isPlayerClimbing = false;
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,   false);
+            animator.SetBool(IS_CLIMBING, false);
             animator.SetBool(IS_CLIMB_IDLE, true);
         }
 
@@ -96,14 +102,14 @@ public partial class PlayerScript
         if (!climbData.isInClimbZone)
             return;
 
-        climbData.hasReachedTop    = true;
+        climbData.hasReachedTop = true;
         climbData.isPlayerClimbing = false;
-        climbData.isHoldingClimb   = false;
+        climbData.isHoldingClimb = false;
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,     false);
-            animator.SetBool(IS_CLIMB_IDLE,   false);
+            animator.SetBool(IS_CLIMBING, false);
+            animator.SetBool(IS_CLIMB_IDLE, false);
             animator.SetBool(IS_CLIMB_TO_TOP, true);
         }
 
@@ -116,11 +122,13 @@ public partial class PlayerScript
         yield return null;
 
         yield return new WaitUntil(() =>
-            animator.GetCurrentAnimatorStateInfo(0).IsName("ClimbToTop"));
+            animator.GetCurrentAnimatorStateInfo(0).IsName("ClimbToTop")
+        );
 
         yield return new WaitUntil(() =>
             animator.GetCurrentAnimatorStateInfo(0).IsName("ClimbToTop")
-            && animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f);
+            && animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f
+        );
 
         if (climbData.exitSnapTarget != null)
         {
@@ -139,12 +147,12 @@ public partial class PlayerScript
 
     private void StopClimbing()
     {
-        climbData.isInClimbZone    = false;
+        climbData.isInClimbZone = false;
         climbData.isPlayerClimbing = false;
-        climbData.isHoldingClimb   = false;
-        climbData.hasReachedTop    = true;
+        climbData.isHoldingClimb = false;
+        climbData.hasReachedTop = true;
 
-        rb.isKinematic           = false;
+        rb.isKinematic = false;
         animator.applyRootMotion = false;
 
         if (climbData.crossToClimbGO != null)
@@ -155,8 +163,8 @@ public partial class PlayerScript
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,     false);
-            animator.SetBool(IS_CLIMB_IDLE,   false);
+            animator.SetBool(IS_CLIMBING, false);
+            animator.SetBool(IS_CLIMB_IDLE, false);
             animator.SetBool(IS_CLIMB_TO_TOP, false);
         }
 
@@ -177,29 +185,55 @@ public partial class PlayerScript
 
     #region MOUNTAIN CLIMB
 
+
     void OnAnimatorMove()
     {
-        if (mountainClimbData.isInClimbZone && mountainClimbData.isPlayerClimbing)
+        // Mountain climb zone
+        if (mountainClimbData.isInClimbZone)
         {
-            Vector3 ladderUp = mountainClimbData.ladderTransform != null
-                               ? mountainClimbData.ladderTransform.up
-                               : transform.up;
+            if (mountainClimbData.isPlayerClimbing)
+            {
+                // Use the normalized slope direction instead of ladderUp alone
+                Vector3 slopeDir = mountainClimbData.climbDirection.normalized;
 
-            float upMagnitude  = Vector3.Dot(animator.deltaPosition, ladderUp);
-            transform.position += ladderUp * upMagnitude;
-            transform.rotation  = UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
+                float delta = mountainClimbData.climbSpeed * Time.deltaTime;
+
+                // Move along both Y and Z according to the slope direction
+                transform.position += slopeDir * delta;
+                transform.rotation = UnityEngine.Quaternion.Euler(
+                    mountainClimbData.climbSnapRotation
+                );
+            }
+            else
+            {
+                // Freeze — no positional change, just lock rotation
+                transform.rotation = UnityEngine.Quaternion.Euler(
+                    mountainClimbData.climbSnapRotation
+                );
+            }
             return;
         }
 
-        if (climbData.isInClimbZone && climbData.isPlayerClimbing)
+        // Regular climb zone — unchanged
+        if (climbData.isInClimbZone)
         {
-            Vector3 ladderUp = climbData.ladderTransform != null
-                               ? climbData.ladderTransform.up
-                               : transform.up;
+            if (climbData.isPlayerClimbing)
+            {
+                Vector3 ladderUp =
+                    climbData.ladderTransform != null ? climbData.ladderTransform.up : Vector3.up;
 
-            float upMagnitude  = Vector3.Dot(animator.deltaPosition, ladderUp);
-            transform.position += ladderUp * upMagnitude;
-            transform.rotation  = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+                float upMagnitude = Vector3.Dot(animator.deltaPosition, ladderUp);
+
+                if (Mathf.Abs(upMagnitude) < 0.0001f)
+                    upMagnitude = climbData.climbSpeed * Time.deltaTime;
+
+                transform.position += ladderUp * upMagnitude;
+                transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+            }
+            else
+            {
+                transform.rotation = UnityEngine.Quaternion.Euler(climbData.climbSnapRotation);
+            }
             return;
         }
 
@@ -212,20 +246,26 @@ public partial class PlayerScript
         if (isDrinking || isBreathing || isCasting || isGliding || isPulling || isSleeping)
             return;
 
-        mountainClimbData.isInClimbZone    = true;
+        mountainClimbData.isInClimbZone = true;
         mountainClimbData.isPlayerClimbing = false;
-        mountainClimbData.isHoldingClimb   = false;
-        mountainClimbData.hasReachedTop    = false;
+        mountainClimbData.isHoldingClimb = false;
+        mountainClimbData.hasReachedTop = false;
 
         isMoving = false;
+        moveSpeed = originalMoveSpeed;
+        stormData.isInStorm = false;
+        animator.speed = 1f;
+        stormData.Reset();
         animator.applyRootMotion = true;
 
         if (mountainClimbData.ladderTransform != null)
         {
             transform.rotation = UnityEngine.Quaternion.Euler(mountainClimbData.climbSnapRotation);
-            transform.position = mountainClimbData.ladderTransform.position
-                               + mountainClimbData.ladderTransform.TransformDirection(
-                                     mountainClimbData.ladderAlignOffset);
+            transform.position =
+                mountainClimbData.ladderTransform.position
+                + mountainClimbData.ladderTransform.TransformDirection(
+                    mountainClimbData.ladderAlignOffset
+                );
         }
         else
         {
@@ -235,7 +275,9 @@ public partial class PlayerScript
             if (mountainClimbData.rotationOffset != Vector3.zero)
                 transform.localRotation = UnityEngine.Quaternion.Euler(30f, 0, 0);
 
-            Debug.LogWarning("MountainClimbData: ladderTransform not assigned — using manual offsets.");
+            Debug.LogWarning(
+                "MountainClimbData: ladderTransform not assigned — using manual offsets."
+            );
         }
 
         if (mountainClimbData.crossToClimbGO != null)
@@ -246,7 +288,7 @@ public partial class PlayerScript
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,   false);
+            animator.SetBool(IS_CLIMBING, false);
             animator.SetBool(IS_CLIMB_IDLE, true);
         }
 
@@ -258,13 +300,17 @@ public partial class PlayerScript
         if (!mountainClimbData.isInClimbZone || isDrinking || isCasting || isGliding || isBreathing)
             return;
 
-        mountainClimbData.isHoldingClimb   = true;
-        mountainClimbData.isPlayerClimbing = true;   // ← fixed: was setting climbData by mistake
+        mountainClimbData.isHoldingClimb = true;
+        mountainClimbData.isPlayerClimbing = true;
+
+        // Re-enable kinematic movement along ladder
+        rb.isKinematic = true; // keep kinematic throughout climb, OnAnimatorMove drives position
+        rb.linearVelocity = Vector3.zero;
 
         if (animator != null)
         {
             animator.SetBool(IS_CLIMB_IDLE, false);
-            animator.SetBool(IS_CLIMBING,   true);
+            animator.SetBool(IS_CLIMBING, true);
         }
 
         Debug.Log("Mountain climbing — hold to continue.");
@@ -275,12 +321,16 @@ public partial class PlayerScript
         if (!mountainClimbData.isInClimbZone || mountainClimbData.hasReachedTop)
             return;
 
-        mountainClimbData.isHoldingClimb   = false;
+        mountainClimbData.isHoldingClimb = false;
         mountainClimbData.isPlayerClimbing = false;
+
+        // Kill any residual vertical velocity so player doesn't drift down
+        rb.linearVelocity = Vector3.zero;
+        rb.isKinematic = true; // lock in place until climbing resumes
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,   false);
+            animator.SetBool(IS_CLIMBING, false);
             animator.SetBool(IS_CLIMB_IDLE, true);
         }
 
@@ -292,14 +342,14 @@ public partial class PlayerScript
         if (!mountainClimbData.isInClimbZone)
             return;
 
-        mountainClimbData.hasReachedTop    = true;
+        mountainClimbData.hasReachedTop = true;
         mountainClimbData.isPlayerClimbing = false;
-        mountainClimbData.isHoldingClimb   = false;
+        mountainClimbData.isHoldingClimb = false;
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,     false);
-            animator.SetBool(IS_CLIMB_IDLE,   false);
+            animator.SetBool(IS_CLIMBING, false);
+            animator.SetBool(IS_CLIMB_IDLE, false);
             animator.SetBool(IS_CLIMB_TO_TOP, true);
         }
 
@@ -312,11 +362,13 @@ public partial class PlayerScript
         yield return null;
 
         yield return new WaitUntil(() =>
-            animator.GetCurrentAnimatorStateInfo(0).IsName("ClimbToTop"));
+            animator.GetCurrentAnimatorStateInfo(0).IsName("ClimbToTop")
+        );
 
         yield return new WaitUntil(() =>
             animator.GetCurrentAnimatorStateInfo(0).IsName("ClimbToTop")
-            && animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f);
+            && animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f
+        );
 
         if (mountainClimbData.exitSnapTarget != null)
         {
@@ -335,12 +387,12 @@ public partial class PlayerScript
 
     private void StopMountainClimbing()
     {
-        mountainClimbData.isInClimbZone    = false;
+        mountainClimbData.isInClimbZone = false;
         mountainClimbData.isPlayerClimbing = false;
-        mountainClimbData.isHoldingClimb   = false;
-        mountainClimbData.hasReachedTop    = true;
+        mountainClimbData.isHoldingClimb = false;
+        mountainClimbData.hasReachedTop = true;
 
-        rb.isKinematic           = false;
+        rb.isKinematic = false;
         animator.applyRootMotion = false;
 
         if (mountainClimbData.crossToClimbGO != null)
@@ -351,8 +403,8 @@ public partial class PlayerScript
 
         if (animator != null)
         {
-            animator.SetBool(IS_CLIMBING,     false);
-            animator.SetBool(IS_CLIMB_IDLE,   false);
+            animator.SetBool(IS_CLIMBING, false);
+            animator.SetBool(IS_CLIMB_IDLE, false);
             animator.SetBool(IS_CLIMB_TO_TOP, false);
         }
 

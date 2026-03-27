@@ -261,6 +261,8 @@ public partial class PlayerScript
 
     private void OnEatComplete()
     {
+        OnFastStopTriggerEnter(transform.position, false, false);
+        OnFastStopTriggerExit();
         pluck.isEating = false;
         animator.SetBool(IS_DRINKING, false);
 
@@ -276,6 +278,8 @@ public partial class PlayerScript
 
         if (pluck.eatButton != null)
             pluck.eatButton.gameObject.SetActive(false);
+
+       
     }
 
     #endregion
@@ -349,7 +353,7 @@ public partial class PlayerScript
         {
             FruitZone fruitZone = GameObject.FindAnyObjectByType<FruitZone>();
             fruitZone.isFruitFallTrigger = true;
-            pluck.eatButton.gameObject.SetActive(true);
+            // pluck.eatButton.gameObject.SetActive(true);
             Debug.Log($"Hit score reached: {pluck.hitScore}");
             pluck.pluckButton.gameObject.SetActive(false);
             ResetPluckAnimationStateToDefault();
@@ -375,6 +379,7 @@ public partial class PlayerScript
 
     private IEnumerator PluckRigRoutine()
     {
+        // Debug.Log("PluckRigRoutine() -- called");
         armPluckRig.weight = 1f;
         yield return null;
         pluck.isPluckRigUp = true;
@@ -382,6 +387,8 @@ public partial class PlayerScript
 
     private void HandlePluckRigDrop()
     {
+        // Debug.Log("HandlePluckRigDrop -- called");
+
         if (!pluck.isPluckRigUp || armPluckRig == null)
             return;
 
@@ -429,7 +436,8 @@ public partial class PlayerScript
     private void ResetPluckAnimationStateToDefault()
     {
         Debug.Log("ResetPluckAnimationStateToDefault() called");
-
+        
+        OnFastStopTriggerEnter(this.transform.position, false, false);
         if (animator != null)
             animator.SetBool(PluckData.IS_PLUCK, false);
 
@@ -442,6 +450,7 @@ public partial class PlayerScript
     public void PlayerHasFruitTaken()
     {
         Debug.Log("Player has taken fruit");
+        pluck.eatButton.gameObject.SetActive(true);
         pluck.hasTakenFruit = true;
     }
 
