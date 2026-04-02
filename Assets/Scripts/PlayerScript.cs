@@ -12,6 +12,7 @@ public partial class PlayerScript : MonoBehaviour
     [SerializeField]
     private float moveSpeed = 5f;
     private Rigidbody rb;
+    [SerializeField]private Vector3 initialPlayerScale;
 
     [Header("UI Buttons")]
     public Button drinkButton;
@@ -179,6 +180,15 @@ public partial class PlayerScript : MonoBehaviour
     private float originalMoveSpeed; // add this line
 
     // =====================
+    // VFX SETTINGS
+    // =====================
+
+    [Header("VFX Settings")]
+    public ParticleSystem slashVFX;
+    public ParticleSystem hitVFX;
+    public Transform vfxSpawnPoint; // assign a transform near the cross/hand
+
+    // =====================
     // LIFECYCLE
     // =====================
 
@@ -246,6 +256,8 @@ public partial class PlayerScript : MonoBehaviour
 
         crossCol = crossReferrence.GetComponent<BoxCollider>();
         crossCol.enabled = false;
+
+        initialPlayerScale = transform.localScale;
     }
 
     // =====================
@@ -494,6 +506,71 @@ public partial class PlayerScript : MonoBehaviour
             );
         }
     }
+
+    // =====================
+    // VFX ANIMATION EVENTS
+    // =====================
+
+    #region VFX ANIMATION EVENTS
+
+    /// <summary>
+    /// Call this Animation Event at the moment the cross swings/raises.
+    /// Works for both cast and pull animations.
+    /// </summary>
+    public void AnimationEvent_PlaySlashVFX()
+    {
+        if (slashVFX == null)
+        {
+            Debug.LogWarning("SlashVFX is not assigned!");
+            return;
+        }
+
+        // Spawn at vfxSpawnPoint if assigned, otherwise at player position
+        if (vfxSpawnPoint != null)
+        {
+            slashVFX.transform.position = vfxSpawnPoint.position;
+            slashVFX.transform.rotation = vfxSpawnPoint.rotation;
+        }
+
+        slashVFX.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        slashVFX.Play();
+        Debug.Log("Slash VFX played");
+    }
+
+    /// <summary>
+    /// Call this Animation Event at the moment of impact.
+    /// Works for both cast and pull animations.
+    /// </summary>
+    public void AnimationEvent_PlayHitVFX()
+    {
+        if (hitVFX == null)
+        {
+            Debug.LogWarning("HitVFX is not assigned!");
+            return;
+        }
+
+        if (vfxSpawnPoint != null)
+        {
+            hitVFX.transform.position = vfxSpawnPoint.position;
+            hitVFX.transform.rotation = vfxSpawnPoint.rotation;
+        }
+
+        hitVFX.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        hitVFX.Play();
+        Debug.Log("Hit VFX played");
+    }
+
+    /// <summary>
+    /// Stops both VFX — call if needed on animation exit or interruption.
+    /// </summary>
+    public void AnimationEvent_StopAllVFX()
+    {
+        slashVFX?.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        hitVFX?.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+    }
+
+    #endregion
+
 
     // =====================
     // ANIMATION & RIGS
@@ -800,6 +877,7 @@ public partial class PlayerScript : MonoBehaviour
     public void AnimationEvent_PullHit()
     {
         pullAnimationComplete = true;
+        AnimationEvent_PlayHitVFX(); // hit fires on impact
         Debug.Log("Pull hit!");
     }
 
@@ -843,11 +921,13 @@ public partial class PlayerScript : MonoBehaviour
     {
         crossCol.enabled = true;
         CameraShake.Instance.ShakeHeavy();
+        AnimationEvent_PlaySlashVFX(); // slash fires at swing moment
     }
 
     public void AnimationEvent_EndCasting()
     {
         CheckAndDamageEnemies();
+        AnimationEvent_PlayHitVFX(); // hit fires when damage is dealt
 
         crossCol.enabled = false;
         isCasting = false;

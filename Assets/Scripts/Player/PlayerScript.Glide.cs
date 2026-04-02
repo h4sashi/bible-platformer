@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
 
+//PlayerScript.Glide.cs
 public partial class PlayerScript
 {
     // =====================
@@ -97,6 +98,8 @@ public partial class PlayerScript
         this.transform.parent = null;
         animator.SetBool(IS_GLIDING, false);
         data.glideRig.weight = 0;
+        transform.localScale = initialPlayerScale;
+
         crossReferrence.SetActive(true);
         crossReferrence.transform.SetParent(handTransform);
         crossReferrence.transform.localPosition = initialTransformCrossOffset;
