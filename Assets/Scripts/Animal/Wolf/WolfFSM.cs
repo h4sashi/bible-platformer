@@ -14,7 +14,7 @@ public class WolfFSM : MonoBehaviour, IDamageable
     [Header("Howl")]
     public float howlCooldown = 6f;
     public float howlDuration = 2f;
-    
+
     public GameObject deathCam;
 
     [Header("Audio")]
@@ -261,7 +261,7 @@ public class WolfFSM : MonoBehaviour, IDamageable
             return;
 
         currentHealth -= (int)damage;
-        
+
         Debug.Log($"Wolf took {damage} damage. Current health: {currentHealth}/{maxHealth}");
 
         // Play hurt sound
@@ -280,6 +280,8 @@ public class WolfFSM : MonoBehaviour, IDamageable
         // Check if wolf died
         if (currentHealth <= 0)
         {
+            Destroy(this.GetComponent<Rigidbody>());
+            Destroy(this.GetComponent<SphereCollider>());
             currentHealth = 0;
             Die();
         }
@@ -297,14 +299,14 @@ public class WolfFSM : MonoBehaviour, IDamageable
             return;
 
         isDead = true;
-        
+
         Debug.Log("Wolf has died!");
 
         // Stop all AI behavior
         isChasing = false;
         isAttacking = false;
         isHowling = false;
-        
+
         // Stop the NavMeshAgent with safety checks
         if (agent != null && agent.enabled && agent.isOnNavMesh)
         {
@@ -312,8 +314,6 @@ public class WolfFSM : MonoBehaviour, IDamageable
             agent.enabled = false;
         }
 
-         Destroy(this.GetComponent<Rigidbody>());
-         Destroy(this.GetComponent<SphereCollider>());
         // Destroy(this.GetComponent<Animator>());
 
         // Play death sound
@@ -334,16 +334,12 @@ public class WolfFSM : MonoBehaviour, IDamageable
             Instantiate(deathVFX, transform.position, Quaternion.identity);
         }
 
-       
-
-       
         // Collider collider = GetComponent<Collider>();
         // if (collider != null)
         // {
         //     collider.enabled = false;
         // }
 
-        
         Destroy(gameObject, deathDuration);
     }
 

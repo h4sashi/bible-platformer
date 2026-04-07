@@ -12,7 +12,9 @@ public partial class PlayerScript : MonoBehaviour
     [SerializeField]
     private float moveSpeed = 5f;
     private Rigidbody rb;
-    [SerializeField]private Vector3 initialPlayerScale;
+
+    [SerializeField]
+    private Vector3 initialPlayerScale;
 
     [Header("UI Buttons")]
     public Button drinkButton;
@@ -311,6 +313,8 @@ public partial class PlayerScript : MonoBehaviour
         HandlePullingInput();
         HandleRockRotation();
         HandleStorm();
+        HandleClimbVelocity();
+        HandleMountainClimbVelocity();
 
         if (isGliding == true)
         {
@@ -349,11 +353,7 @@ public partial class PlayerScript : MonoBehaviour
     // PHYSICS
     // =====================
 
-    private void FixedUpdate()
-    {
-        CheckGrounded();
-        ApplyGravity();
-    }
+
 
     private void CheckGrounded()
     {
