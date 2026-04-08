@@ -17,6 +17,7 @@ public partial class PlayerScript : MonoBehaviour
     private Vector3 initialPlayerScale;
 
     [Header("UI Buttons")]
+    public Button hitButton;
     public Button drinkButton;
     public Button pullButton;
     public Button SandStormbutton;
@@ -353,8 +354,6 @@ public partial class PlayerScript : MonoBehaviour
     // PHYSICS
     // =====================
 
-
-
     private void CheckGrounded()
     {
         Vector3 rayOrigin = transform.position + Vector3.up * 0.1f;
@@ -662,6 +661,8 @@ public partial class PlayerScript : MonoBehaviour
             isNearWaterFountain = true;
             currentWaterFountain = other.gameObject;
             Debug.Log("Near water fountain - Press K to drink");
+            if (hitButton != null)
+                hitButton.gameObject.SetActive(false);
             canvasTrigger = other.GetComponent<CanvasTrigger>();
             canvasTrigger?.ActivateCanvas();
 
@@ -675,6 +676,8 @@ public partial class PlayerScript : MonoBehaviour
         if (other.CompareTag("ActionTrigger") && other.name == "Water Fountain")
         {
             isNearWaterFountain = false;
+            if (hitButton != null)
+                hitButton.gameObject.SetActive(true);
             currentWaterFountain = null;
             Debug.Log("Left water fountain area");
 
@@ -774,6 +777,7 @@ public partial class PlayerScript : MonoBehaviour
         isBlockedByRock = true;
         rockObstaclePosition = rockPosition;
         canPull = true;
+        hitButton.gameObject.SetActive(false);
         Debug.Log("Near rock obstacle - Can now pull");
     }
 
@@ -792,6 +796,7 @@ public partial class PlayerScript : MonoBehaviour
         if (crossReferrence != null && !crossReferrence.activeInHierarchy)
             crossReferrence.SetActive(true);
 
+        hitButton.gameObject.SetActive(true);
         Debug.Log("Exited rock obstacle area");
     }
 
@@ -812,6 +817,9 @@ public partial class PlayerScript : MonoBehaviour
 
         if (pullButton != null)
             pullButton.gameObject.SetActive(false);
+
+        if (hitButton != null)
+            hitButton.gameObject.SetActive(true);
 
         Debug.Log("Rock obstacle cleared");
     }

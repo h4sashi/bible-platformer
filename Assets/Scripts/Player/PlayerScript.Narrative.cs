@@ -164,6 +164,9 @@ public partial class PlayerScript
 
     private void OnDrinkComplete()
     {
+         if(hitButton != null)
+            hitButton.gameObject.SetActive(true);
+        
         if (currentWaterAmount >= canvasTrigger.drinkMax)
         {
             Debug.Log("Max water reached! Drinking complete.");

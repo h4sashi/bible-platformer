@@ -10,6 +10,7 @@ public class PauseMenu : MonoBehaviour
     [SerializeField] private Button pauseButton;
     [SerializeField] private Button resumeButton;
     [SerializeField] private Button soundButton;
+    [SerializeField] private Button quitButton;
 
 
     [SerializeField] private GameObject wolfPack_1;
@@ -35,6 +36,9 @@ public class PauseMenu : MonoBehaviour
 
         if (soundButton != null)
             soundButton.onClick.AddListener(ToggleSound);
+
+        if(quitButton != null)
+            quitButton.onClick.AddListener(Home);
 
         // 🔥 Load saved state
         isSoundOn = PlayerPrefs.GetInt(SOUND_KEY, 1) == 1;
