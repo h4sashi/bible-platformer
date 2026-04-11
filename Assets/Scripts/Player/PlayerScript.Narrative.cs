@@ -164,9 +164,9 @@ public partial class PlayerScript
 
     private void OnDrinkComplete()
     {
-         if(hitButton != null)
+        if (hitButton != null)
             hitButton.gameObject.SetActive(true);
-        
+
         if (currentWaterAmount >= canvasTrigger.drinkMax)
         {
             Debug.Log("Max water reached! Drinking complete.");
@@ -216,6 +216,7 @@ public partial class PlayerScript
 
     public void OnEatButtonDown()
     {
+       
         if (
             !pluck.isEating
             && !isDrinking
@@ -273,6 +274,7 @@ public partial class PlayerScript
             pluck.apple.SetActive(false);
 
         crossReferrence.SetActive(true);
+        hitButton.gameObject.SetActive(true);
         eatBlockade.SetActive(false);
 
         Debug.Log("Eating complete!");
@@ -281,8 +283,6 @@ public partial class PlayerScript
 
         if (pluck.eatButton != null)
             pluck.eatButton.gameObject.SetActive(false);
-
-       
     }
 
     #endregion
@@ -326,7 +326,7 @@ public partial class PlayerScript
         else
         {
             pluck.ExitZone();
-             pluck.pluckButton.gameObject.SetActive(false);
+            pluck.pluckButton.gameObject.SetActive(false);
             InitRigAfterPluckCompletion();
 
             if (animator != null)
@@ -339,6 +339,8 @@ public partial class PlayerScript
 
     public void OnPluckButtonDown()
     {
+        hitButton.gameObject.SetActive(false);
+
         if (
             !pluck.isInPluckZone
             || isDrinking
@@ -439,7 +441,7 @@ public partial class PlayerScript
     private void ResetPluckAnimationStateToDefault()
     {
         Debug.Log("ResetPluckAnimationStateToDefault() called");
-        
+
         OnFastStopTriggerEnter(this.transform.position, false, false);
         if (animator != null)
             animator.SetBool(PluckData.IS_PLUCK, false);

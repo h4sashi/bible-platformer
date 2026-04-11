@@ -45,10 +45,9 @@ public class SleepTrigger : MonoBehaviour
     public TriggerType triggerType;
 
     public UnityEvent enableEvents;
-     public UnityEvent onEventExecution;
-     public UnityEvent disableEvents;
-     public UnityEvent OnSleepingFinish;
-     
+    public UnityEvent onEventExecution;
+    public UnityEvent disableEvents;
+    public UnityEvent OnSleepingFinish;
 
     void Start()
     {
@@ -185,6 +184,7 @@ public class SleepTrigger : MonoBehaviour
                 sleepPromptUI.SetActive(true);
 
             player = other.GetComponent<PlayerScript>();
+            player.hitButton.gameObject.SetActive(false);
             player.stormData.isInStorm = false;
         }
     }
@@ -249,18 +249,16 @@ public class SleepTrigger : MonoBehaviour
             sleepPromptUI.SetActive(false);
         if (sleepCanvas != null)
             sleepCanvas.SetActive(false);
-            enableEvents?.Invoke();
-            disableEvents?.Invoke();
+        enableEvents?.Invoke();
+        disableEvents?.Invoke();
 
         // Disable collider so this never triggers again
         Collider col = GetComponent<Collider>();
         if (col != null)
             col.enabled = false;
 
- OnSleepingFinish?.Invoke();
+        OnSleepingFinish?.Invoke();
         player.StopStormSleeping();
-        
-
 
         // PostSleepPlayerScript postSleepPlayerScript = GameObject
         //     .FindGameObjectWithTag("Player")
