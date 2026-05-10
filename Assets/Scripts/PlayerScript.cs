@@ -8,6 +8,11 @@ using Vector3 = UnityEngine.Vector3;
 
 public partial class PlayerScript : MonoBehaviour
 {
+
+    //when player is sliding down the slope he should maintain
+    //descend without any player input and whatnot
+
+
     [Header("Movement Settings")]
     [SerializeField]
     private float moveSpeed = 5f;
@@ -319,7 +324,7 @@ public partial class PlayerScript : MonoBehaviour
 
         if (isGliding == true)
         {
-            this.transform.localRotation = UnityEngine.Quaternion.Euler(0, -90f, 0);
+            this.transform.localRotation = UnityEngine.Quaternion.Euler(0, 0f, 0);
             DisableAllMovements();
         }
 

@@ -1,9 +1,13 @@
-using System.Collections;
-using System.Collections.Generic;
+using System;
 using UnityEngine;
 
 public class GlideTrigger : MonoBehaviour
 {
+    private const string DefaultGlideDataId = "default";
+    private const float InputDeadZone = 0.01f;
+    private static readonly Vector3 GlideSeatLocalPosition = new Vector3(0f, 0f, -0.05f);
+    private static readonly Quaternion GlideSeatLocalRotation = Quaternion.Euler(0f, 0f, 0f);
+
     public enum TriggerType
     {
         GlideZoneOn,
@@ -29,6 +33,14 @@ public class GlideTrigger : MonoBehaviour
     private float smoothRotation = 10f;
     public float rotGlideAxes = 0;
 
+    [Header("Default Auto Glide")]
+    [SerializeField]
+    private bool autoMoveDefaultGlide = true;
+
+    [SerializeField]
+    [Range(-1f, 1f)]
+    private float defaultAutoMoveInput = 1f;
+
     private float horizontalInput;
     private Vector3 moveDirection;
 
@@ -49,12 +61,16 @@ public class GlideTrigger : MonoBehaviour
     {
         if (IsPlayerGliding == true && player != null)
         {
-            player.localPosition = new Vector3(0, 0, -.05f);
-            player.transform.rotation = Quaternion.Euler(0, 0, 0);
-
             GetGlideInput();
             HandleGlideMovement();
-            HandleGlideRotation();
+        }
+    }
+
+    private void LateUpdate()
+    {
+        if (IsPlayerGliding == true && player != null)
+        {
+            SnapPlayerToGlideSeat();
         }
     }
 
@@ -86,11 +102,20 @@ public class GlideTrigger : MonoBehaviour
         horizontalInput = useMobileControls
             ? mobileHorizontalInput
             : Input.GetAxisRaw("Horizontal");
+
+        if (
+            autoMoveDefaultGlide
+            && IsDefaultGlideData()
+            && Mathf.Abs(horizontalInput) <= InputDeadZone
+        )
+        {
+            horizontalInput = defaultAutoMoveInput >= 0f ? 1f : -1f;
+        }
     }
 
     void HandleGlideMovement()
     {
-        if (Mathf.Abs(horizontalInput) > 0.01f)
+        if (Mathf.Abs(horizontalInput) > InputDeadZone)
         {
             moveDirection = new Vector3(0, 0, horizontalInput);
             transform.Translate(moveDirection * glideSpeed * Time.deltaTime, Space.World);
@@ -99,7 +124,7 @@ public class GlideTrigger : MonoBehaviour
 
     void HandleGlideRotation()
     {
-        if (Mathf.Abs(horizontalInput) > 0.01f && player != null)
+        if (Mathf.Abs(horizontalInput) > InputDeadZone && player != null)
         {
             Quaternion targetRotation =
                 horizontalInput < 0 ? Quaternion.Euler(0, 180, 0) : Quaternion.Euler(0, 90f, 0);
@@ -132,6 +157,7 @@ public class GlideTrigger : MonoBehaviour
 
         player = other.transform;
         player.SetParent(transform);
+        SnapPlayerToGlideSeat();
         IsPlayerGliding = true;
     }
 
@@ -147,5 +173,17 @@ public class GlideTrigger : MonoBehaviour
         GlideData data = playerScript.GetGlideDataById(glideDataId);
         playerScript.StopGliding(data);
         IsPlayerGliding = false;
+    }
+
+    private bool IsDefaultGlideData()
+    {
+        return string.IsNullOrWhiteSpace(glideDataId)
+            || string.Equals(glideDataId, DefaultGlideDataId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SnapPlayerToGlideSeat()
+    {
+        player.localPosition = GlideSeatLocalPosition;
+        player.localRotation = GlideSeatLocalRotation;
     }
 }

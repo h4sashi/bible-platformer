@@ -5,6 +5,9 @@ using UnityEngine.Animations.Rigging;
 //PlayerScript.Glide.cs
 public partial class PlayerScript
 {
+    private bool wasUsingGravityBeforeGlide;
+    private bool hasStoredGlidePhysicsState;
+
     // =====================
     // OASIS / SAIL
     // =====================
@@ -85,6 +88,7 @@ public partial class PlayerScript
 
     public void StartGliding(GlideData data)
     {
+        PrepareGlidePhysics();
         isGliding = true;
         animator.SetBool(IS_GLIDING, true);
         isMoving = false;
@@ -96,6 +100,7 @@ public partial class PlayerScript
     {
         isGliding = false;
         this.transform.parent = null;
+        RestoreGlidePhysics();
         animator.SetBool(IS_GLIDING, false);
         data.glideRig.weight = 0;
         transform.localScale = initialPlayerScale;
@@ -121,6 +126,37 @@ public partial class PlayerScript
         if (mountainGlideData.id == id)
             return mountainGlideData;
         return glideData; // "default" fallback
+    }
+
+    private void PrepareGlidePhysics()
+    {
+        if (rb == null)
+            return;
+
+        if (!hasStoredGlidePhysicsState)
+        {
+            wasUsingGravityBeforeGlide = rb.useGravity;
+            hasStoredGlidePhysicsState = true;
+        }
+
+        rb.useGravity = false;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+    }
+
+    private void RestoreGlidePhysics()
+    {
+        if (rb == null)
+            return;
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        if (!hasStoredGlidePhysicsState)
+            return;
+
+        rb.useGravity = wasUsingGravityBeforeGlide;
+        hasStoredGlidePhysicsState = false;
     }
 
     #endregion
