@@ -33,12 +33,40 @@ public class BibleTrigger : MonoBehaviour
     public UnityEvent OnTypeFinishEvent;
 
     public UnityEvent enableEvents;
-    
+
     public UnityEvent disableEvents;
+
+    [Header("Wolf Encounter")]
+    [SerializeField]
+    private bool activateWolvesSequentially = false;
+
+    [SerializeField]
+    private Transform wolfPack;
+
+    [SerializeField]
+    private WolfFSM[] wolves;
+
+    [SerializeField]
+    private float nextWolfActivationDelay = 0.5f;
+
+    private int currentWolfIndex = -1;
+    private bool wolfEncounterStarted;
+    private Coroutine nextWolfRoutine;
 
     private void OnEnable()
     {
         OnTypingFinishEvent += DisableUI;
+    }
+
+    private void OnDisable()
+    {
+        OnTypingFinishEvent -= DisableUI;
+        UnsubscribeFromWolves();
+    }
+
+    private void Start()
+    {
+        PrepareWolfEncounter();
     }
 
     private void DisableUI()
@@ -72,6 +100,8 @@ public class BibleTrigger : MonoBehaviour
             enableEvents?.Invoke();
             disableEvents?.Invoke();
         }
+
+        StartWolfEncounter();
     }
 
     IEnumerator TypeVerse()
@@ -129,5 +159,100 @@ public class BibleTrigger : MonoBehaviour
             StopCoroutine(typingRoutine);
 
         typingRoutine = StartCoroutine(TypeVerseAux());
+    }
+
+    private void StartWolfEncounter()
+    {
+        if (!activateWolvesSequentially || wolfEncounterStarted)
+            return;
+
+        PrepareWolfEncounter();
+
+        if (wolves == null || wolves.Length == 0)
+            return;
+
+        if (wolfPack != null)
+            wolfPack.gameObject.SetActive(true);
+
+        wolfEncounterStarted = true;
+        currentWolfIndex = -1;
+
+        ActivateNextWolf();
+    }
+
+    private void PrepareWolfEncounter()
+    {
+        if (!activateWolvesSequentially || wolfEncounterStarted)
+            return;
+
+        CacheWolves();
+
+        if (wolves == null)
+            return;
+
+        for (int i = 0; i < wolves.Length; i++)
+        {
+            if (wolves[i] == null)
+                continue;
+
+            wolves[i].Died -= HandleWolfDied;
+            wolves[i].gameObject.SetActive(false);
+        }
+    }
+
+    private void CacheWolves()
+    {
+        if (wolfPack == null && transform.parent != null)
+            wolfPack = transform.parent.Find("WolfPack");
+
+        if ((wolves == null || wolves.Length == 0) && wolfPack != null)
+            wolves = wolfPack.GetComponentsInChildren<WolfFSM>(true);
+    }
+
+    private void ActivateNextWolf()
+    {
+        currentWolfIndex++;
+
+        while (wolves != null && currentWolfIndex < wolves.Length && wolves[currentWolfIndex] == null)
+            currentWolfIndex++;
+
+        if (wolves == null || currentWolfIndex >= wolves.Length)
+            return;
+
+        WolfFSM wolf = wolves[currentWolfIndex];
+        wolf.Died -= HandleWolfDied;
+        wolf.Died += HandleWolfDied;
+        wolf.gameObject.SetActive(true);
+    }
+
+    private void HandleWolfDied(WolfFSM wolf)
+    {
+        wolf.Died -= HandleWolfDied;
+
+        if (nextWolfRoutine != null)
+            StopCoroutine(nextWolfRoutine);
+
+        nextWolfRoutine = StartCoroutine(ActivateNextWolfAfterDelay());
+    }
+
+    private IEnumerator ActivateNextWolfAfterDelay()
+    {
+        if (nextWolfActivationDelay > 0f)
+            yield return new WaitForSeconds(nextWolfActivationDelay);
+
+        ActivateNextWolf();
+        nextWolfRoutine = null;
+    }
+
+    private void UnsubscribeFromWolves()
+    {
+        if (wolves == null)
+            return;
+
+        for (int i = 0; i < wolves.Length; i++)
+        {
+            if (wolves[i] != null)
+                wolves[i].Died -= HandleWolfDied;
+        }
     }
 }

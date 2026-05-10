@@ -1,8 +1,11 @@
+using System;
 using UnityEngine;
 using UnityEngine.AI;
 
 public class WolfFSM : MonoBehaviour, IDamageable
 {
+    public event Action<WolfFSM> Died;
+
     [Header("Detection")]
     public LayerMask playerMask;
     public float detectionRadius = 15f;
@@ -301,6 +304,7 @@ public class WolfFSM : MonoBehaviour, IDamageable
         isDead = true;
 
         Debug.Log("Wolf has died!");
+        Died?.Invoke(this);
 
         // Stop all AI behavior
         isChasing = false;

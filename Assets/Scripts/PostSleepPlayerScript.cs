@@ -159,7 +159,23 @@ public class PostSleepPlayerScript : MonoBehaviour
     {
         isActive = false;
         mobileHorizontalInput = 0f;
-        blockade.SetActive(false);
+        horizontalInput = 0f;
+        isMoving = false;
+        isDrinking = false;
+        isPickingFruit = false;
+
+        if (blockade != null)
+            blockade.SetActive(false);
+
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        if (playerScript != null)
+            playerScript.enabled = false;
 
         if (buttonPlayerCanvas != null && buttonSleepCanvas != null)
         {
@@ -172,20 +188,12 @@ public class PostSleepPlayerScript : MonoBehaviour
         if (animator != null && originalController != null)
             animator.runtimeAnimatorController = originalController;
 
-        if (playerScript != null)
-            playerScript.enabled = true;
+        ResetAnimatorBools();
 
-        // Restore cross to correct parent and transform
-        crossReferrence.transform.SetParent(playerScript.handTransform);
-        crossReferrence.transform.localPosition = playerScript.initialTransformCrossOffset;
-        crossReferrence.transform.localRotation = Quaternion.Euler(
-            playerScript.initialRotationCrossOffset
-        );
-        crossReferrence.SetActive(true);
+        if (cupGO != null)
+            cupGO.SetActive(false);
 
-        standingCross.SetActive(false);
-
-        // Rebind animator to force IK constraints to reattach
+        RestoreDefaultCarryState();
         StartCoroutine(RebindRig());
 
         Debug.Log("PostSleepPlayerScript deactivated — original controller restored");
@@ -196,17 +204,88 @@ public class PostSleepPlayerScript : MonoBehaviour
         // Wait one frame for the controller swap to settle
         yield return null;
 
-        animator.Rebind();
-        animator.Update(0f);
+        if (animator != null)
+        {
+            animator.Rebind();
+            animator.Update(0f);
+            ResetAnimatorBools();
+        }
 
-        playerScript.walkRig.weight = 1f;
-        playerScript.armRig.weight = 1f;
-        playerScript.targetRigWeight = 1f;
+        if (playerScript != null)
+        {
+            if (playerScript.walkRig != null)
+                playerScript.walkRig.weight = 1f;
 
-        rig.enabled = true;
-        rig.Build();
+            if (playerScript.armRig != null)
+                playerScript.armRig.weight = 1f;
+
+            playerScript.targetRigWeight = 1f;
+        }
+
+        if (rig != null)
+        {
+            rig.enabled = true;
+            rig.Build();
+        }
+
+        yield return new WaitForEndOfFrame();
+
+        RestoreDefaultCarryState();
+
+        if (playerScript != null)
+            playerScript.enabled = true;
 
         Debug.Log("Rig rebound and rebuilt");
+    }
+
+    private void RestoreDefaultCarryState()
+    {
+        GameObject defaultCross =
+            playerScript != null && playerScript.crossReferrence != null
+                ? playerScript.crossReferrence
+                : crossReferrence;
+
+        if (standingCross != null)
+            standingCross.SetActive(false);
+
+        if (defaultCross == null || playerScript == null || playerScript.handTransform == null)
+            return;
+
+        crossReferrence = defaultCross;
+        crossReferrence.transform.SetParent(playerScript.handTransform, false);
+        crossReferrence.transform.localPosition = playerScript.initialTransformCrossOffset;
+        crossReferrence.transform.localRotation = Quaternion.Euler(
+            playerScript.initialRotationCrossOffset
+        );
+        crossReferrence.SetActive(true);
+    }
+
+    private void ResetAnimatorBools()
+    {
+        SetAnimatorBoolIfExists(IS_WALKING, false);
+        SetAnimatorBoolIfExists(PICK_FRUIT, false);
+        SetAnimatorBoolIfExists(IS_DRINKING, false);
+        SetAnimatorBoolIfExists("IsWalking", false);
+        SetAnimatorBoolIfExists("IsDrinking", false);
+        SetAnimatorBoolIfExists("isSleeping", false);
+    }
+
+    private void SetAnimatorBoolIfExists(string parameterName, bool value)
+    {
+        if (animator == null)
+            return;
+
+        foreach (AnimatorControllerParameter parameter in animator.parameters)
+        {
+            if (
+                parameter.type == AnimatorControllerParameterType.Bool
+                && parameter.name == parameterName
+            )
+            {
+                animator.SetBool(parameterName, value);
+                return;
+            }
+        }
     }
 
     // =============================================
