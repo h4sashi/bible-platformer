@@ -2,6 +2,7 @@ using System.Collections;
 using System.Numerics;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
@@ -25,6 +26,7 @@ public partial class PlayerScript : MonoBehaviour
     public Button hitButton;
     public Button drinkButton;
     public Button pullButton;
+    public Button sprintButton;
     public Button SandStormbutton;
 
     [SerializeField]
@@ -124,6 +126,42 @@ public partial class PlayerScript : MonoBehaviour
     private float mobileHorizontalInput;
     private bool mobileCastPressed = false;
 
+    [Header("Sprint Settings")]
+    [SerializeField]
+    private KeyCode sprintKey = KeyCode.LeftShift;
+
+    [SerializeField]
+    private float sprintSpeedMultiplier = 1.9f;
+
+    [SerializeField]
+    private float sprintAnimationSpeedMultiplier = 1.35f;
+
+    [SerializeField]
+    private float sprintDuration = 5f;
+
+    [SerializeField]
+    private float sprintCooldown = 4f;
+
+    [SerializeField]
+    private Color sprintActiveColor = new Color(0.25f, 0.8f, 1f, 1f);
+
+    [SerializeField]
+    private Color sprintCooldownColor = new Color(0.45f, 0.45f, 0.45f, 1f);
+
+    private bool mobileSprintHeld = false;
+    private bool isSprinting = false;
+    private bool sprintInputLockedUntilRelease = false;
+    private bool wasSprintRequested = false;
+    private bool sprintAdjustedAnimatorSpeed = false;
+    private float sprintDirectionInput = 1f;
+    private float sprintTimeRemaining;
+    private float sprintCooldownRemaining;
+    private Graphic sprintButtonGraphic;
+    private Image sprintButtonImage;
+    private Color sprintButtonDefaultColor = Color.white;
+    private bool hasSprintButtonDefaultColor;
+    private bool sprintButtonEventsConfigured;
+
     [Header("Pull Settings")]
     private const string PULL_TRIGGER = "Pull";
     private bool isPulling;
@@ -205,8 +243,14 @@ public partial class PlayerScript : MonoBehaviour
         glideData.glideRig.weight = 0;
         currentHealth = maxHealth;
         originalMoveSpeed = moveSpeed;
+        NormalizeSprintSettings();
+        sprintDirectionInput = GetFacingMoveDirection();
+        sprintTimeRemaining = sprintDuration;
         isSleeping = false;
         rb = GetComponent<Rigidbody>();
+        CacheSprintButtonVisuals();
+        ConfigureSprintButtonEvents();
+        UpdateSprintButtonVisual();
 
         if (splashDamageImage != null)
             splashDamageImage.color = Color.clear;
@@ -282,6 +326,8 @@ public partial class PlayerScript : MonoBehaviour
             isMoving = false;
             horizontalInput = 0f;
         }
+
+        HandleSprint();
 
         // Either ledge's active state blocks all movement
         bool anyLedgeActive = ledgeZoneData.isLedgeActive || secondLedgeZoneData.isLedgeActive;
@@ -455,9 +501,7 @@ public partial class PlayerScript : MonoBehaviour
         {
             moveDirection = new Vector3(0, 0, horizontalInput);
 
-            float currentSpeed = stormData.isInStorm
-                ? moveSpeed * stormData.playerSpeedModifier
-                : moveSpeed;
+            float currentSpeed = GetCurrentMoveSpeed();
 
             Vector3 intendedPosition =
                 transform.position + moveDirection * currentSpeed * Time.deltaTime;
@@ -492,6 +536,236 @@ public partial class PlayerScript : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    private float GetCurrentMoveSpeed()
+    {
+        float currentSpeed = stormData.isInStorm
+            ? moveSpeed * stormData.playerSpeedModifier
+            : moveSpeed;
+
+        return isSprinting ? currentSpeed * sprintSpeedMultiplier : currentSpeed;
+    }
+
+    private void NormalizeSprintSettings()
+    {
+        sprintSpeedMultiplier = Mathf.Max(1f, sprintSpeedMultiplier);
+        sprintAnimationSpeedMultiplier = Mathf.Max(1f, sprintAnimationSpeedMultiplier);
+        sprintDuration = Mathf.Max(0.01f, sprintDuration);
+        sprintCooldown = Mathf.Max(0f, sprintCooldown);
+    }
+
+    private void HandleSprint()
+    {
+        NormalizeSprintSettings();
+        UpdateSprintCooldown();
+
+        bool sprintRequested = IsSprintRequested();
+        if (sprintRequested && !wasSprintRequested)
+            CaptureSprintDirection();
+
+        if (!sprintRequested)
+            sprintInputLockedUntilRelease = false;
+
+        isSprinting =
+            sprintRequested
+            && !sprintInputLockedUntilRelease
+            && sprintCooldownRemaining <= 0f
+            && sprintTimeRemaining > 0f
+            && CanSprintInCurrentState();
+
+        if (isSprinting)
+        {
+            horizontalInput = sprintDirectionInput;
+            isMoving = true;
+            sprintTimeRemaining -= Time.deltaTime;
+
+            if (sprintTimeRemaining <= 0f)
+                StartSprintCooldown();
+        }
+
+        wasSprintRequested = sprintRequested;
+        UpdateSprintButtonVisual();
+    }
+
+    private bool IsSprintRequested()
+    {
+        return mobileSprintHeld || Input.GetKey(sprintKey);
+    }
+
+    private void CaptureSprintDirection()
+    {
+        sprintDirectionInput = GetInputMoveDirection();
+    }
+
+    private float GetInputMoveDirection()
+    {
+        if (Mathf.Abs(horizontalInput) > 0.01f)
+            return Mathf.Sign(horizontalInput);
+
+        float rawInput = useMobileControls ? mobileHorizontalInput : Input.GetAxisRaw("Horizontal");
+        if (Mathf.Abs(rawInput) > 0.01f)
+            return Mathf.Sign(rawInput);
+
+        return GetFacingMoveDirection();
+    }
+
+    private float GetFacingMoveDirection()
+    {
+        return Vector3.Dot(transform.forward, Vector3.forward) >= 0f ? 1f : -1f;
+    }
+
+    private bool CanSprintInCurrentState()
+    {
+        return !isBreathing
+            && !isDrinking
+            && !isCasting
+            && !isGliding
+            && !isSleeping
+            && !isPulling
+            && !isNearWaterFountain
+            && !sailData.isSailing
+            && !stormData.isCrossStanding
+            && !pluck.isPlucking
+            && !pluck.isEating
+            && !climbData.isInClimbZone
+            && !mountainClimbData.isInClimbZone
+            && !ledgeZoneData.isLedgeActive
+            && !ledgeZoneData.isNoCrossWalk
+            && !secondLedgeZoneData.isLedgeActive
+            && !secondLedgeZoneData.isNoCrossWalk;
+    }
+
+    private void UpdateSprintCooldown()
+    {
+        if (sprintCooldownRemaining <= 0f)
+            return;
+
+        sprintCooldownRemaining -= Time.deltaTime;
+
+        if (sprintCooldownRemaining <= 0f)
+        {
+            sprintCooldownRemaining = 0f;
+            sprintTimeRemaining = Mathf.Max(0.01f, sprintDuration);
+        }
+    }
+
+    private void StartSprintCooldown()
+    {
+        isSprinting = false;
+        mobileSprintHeld = false;
+        sprintInputLockedUntilRelease = true;
+        wasSprintRequested = false;
+        sprintTimeRemaining = 0f;
+
+        sprintCooldownRemaining = Mathf.Max(0f, sprintCooldown);
+        if (sprintCooldownRemaining <= 0f)
+            sprintTimeRemaining = Mathf.Max(0.01f, sprintDuration);
+    }
+
+    private void CacheSprintButtonVisuals()
+    {
+        if (sprintButton == null)
+        {
+            GameObject sprintButtonObject = GameObject.Find("SprintButton");
+            if (sprintButtonObject != null)
+                sprintButton = sprintButtonObject.GetComponent<Button>();
+        }
+
+        if (sprintButton == null)
+            return;
+
+        sprintButtonGraphic = sprintButton.targetGraphic;
+        if (sprintButtonGraphic == null)
+            sprintButtonGraphic = sprintButton.GetComponent<Graphic>();
+
+        sprintButtonImage = sprintButton.GetComponent<Image>();
+
+        if (sprintButtonGraphic != null && !hasSprintButtonDefaultColor)
+        {
+            sprintButtonDefaultColor = sprintButtonGraphic.color;
+            hasSprintButtonDefaultColor = true;
+        }
+    }
+
+    private void ConfigureSprintButtonEvents()
+    {
+        if (sprintButton == null || sprintButtonEventsConfigured)
+            return;
+
+        EventTrigger sprintEventTrigger = sprintButton.GetComponent<EventTrigger>();
+        if (sprintEventTrigger == null)
+            sprintEventTrigger = sprintButton.gameObject.AddComponent<EventTrigger>();
+
+        AddSprintButtonEvent(
+            sprintEventTrigger,
+            EventTriggerType.PointerDown,
+            _ => OnSprintButtonDown()
+        );
+        AddSprintButtonEvent(
+            sprintEventTrigger,
+            EventTriggerType.PointerUp,
+            _ => OnSprintButtonUp()
+        );
+        AddSprintButtonEvent(
+            sprintEventTrigger,
+            EventTriggerType.PointerExit,
+            _ => OnSprintButtonUp()
+        );
+        sprintButtonEventsConfigured = true;
+    }
+
+    private void AddSprintButtonEvent(
+        EventTrigger sprintEventTrigger,
+        EventTriggerType eventType,
+        UnityEngine.Events.UnityAction<BaseEventData> callback
+    )
+    {
+        EventTrigger.Entry entry = sprintEventTrigger.triggers.Find(
+            triggerEntry => triggerEntry.eventID == eventType
+        );
+
+        if (entry == null)
+        {
+            entry = new EventTrigger.Entry { eventID = eventType };
+            sprintEventTrigger.triggers.Add(entry);
+        }
+
+        entry.callback.AddListener(callback);
+    }
+
+    private void UpdateSprintButtonVisual()
+    {
+        if (sprintButton == null)
+            CacheSprintButtonVisuals();
+
+        ConfigureSprintButtonEvents();
+
+        if (sprintButton == null)
+            return;
+
+        bool isCoolingDown = sprintCooldownRemaining > 0f;
+        sprintButton.interactable = !isCoolingDown;
+
+        if (sprintButtonGraphic != null)
+        {
+            if (isCoolingDown)
+                sprintButtonGraphic.color = sprintCooldownColor;
+            else if (isSprinting)
+                sprintButtonGraphic.color = sprintActiveColor;
+            else
+                sprintButtonGraphic.color = sprintButtonDefaultColor;
+        }
+
+        if (sprintButtonImage != null)
+        {
+            if (isCoolingDown && sprintCooldown > 0f)
+                sprintButtonImage.fillAmount = 1f - (sprintCooldownRemaining / sprintCooldown);
+            else if (sprintDuration > 0f)
+                sprintButtonImage.fillAmount = Mathf.Clamp01(sprintTimeRemaining / sprintDuration);
+            else
+                sprintButtonImage.fillAmount = 1f;
+        }
     }
 
     void HandleRotation()
@@ -586,7 +860,26 @@ public partial class PlayerScript : MonoBehaviour
             return;
 
         bool anyNoCrossWalk = ledgeZoneData.isNoCrossWalk || secondLedgeZoneData.isNoCrossWalk;
-        animator.SetBool(IS_MOVING, isMoving && !anyNoCrossWalk);
+        bool shouldPlayMoveAnimation = (isMoving || isSprinting) && !anyNoCrossWalk;
+        animator.SetBool(IS_MOVING, shouldPlayMoveAnimation);
+        UpdateSprintAnimationSpeed(shouldPlayMoveAnimation);
+    }
+
+    private void UpdateSprintAnimationSpeed(bool shouldPlayMoveAnimation)
+    {
+        if (animator == null || stormData.isInStorm)
+            return;
+
+        if (isSprinting && shouldPlayMoveAnimation)
+        {
+            animator.speed = sprintAnimationSpeedMultiplier;
+            sprintAdjustedAnimatorSpeed = true;
+        }
+        else if (sprintAdjustedAnimatorSpeed)
+        {
+            animator.speed = 1f;
+            sprintAdjustedAnimatorSpeed = false;
+        }
     }
 
     void HandleRigWeight()
@@ -737,6 +1030,19 @@ public partial class PlayerScript : MonoBehaviour
         mobileCastPressed = false;
     }
 
+    public void OnSprintButtonDown()
+    {
+        CaptureSprintDirection();
+        mobileSprintHeld = true;
+    }
+
+    public void OnSprintButtonUp()
+    {
+        mobileSprintHeld = false;
+        sprintInputLockedUntilRelease = false;
+        wasSprintRequested = false;
+    }
+
     // =====================
     // UTILITIES
     // =====================
@@ -748,6 +1054,13 @@ public partial class PlayerScript : MonoBehaviour
         isDrinking = false;
         isPulling = false;
         isSleeping = false;
+        isSprinting = false;
+        wasSprintRequested = false;
+        if (sprintAdjustedAnimatorSpeed && animator != null)
+        {
+            animator.speed = 1f;
+            sprintAdjustedAnimatorSpeed = false;
+        }
         pluck.Reset();
         pullAnimationComplete = false;
     }

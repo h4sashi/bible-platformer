@@ -9,6 +9,7 @@ TagManager:
   - TriggerObstacle
   - SleepTrigger
   - Bread
+  - Water
   layers:
   - Default
   - TransparentFX
