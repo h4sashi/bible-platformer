@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -49,9 +50,20 @@ public class BibleTrigger : MonoBehaviour
     [SerializeField]
     private float nextWolfActivationDelay = 0.5f;
 
+    [Header("Wolf Pack Clear")]
+    [SerializeField]
+    private bool liftBlockadeWhenWolfPackCleared = true;
+
+    [SerializeField]
+    private GameObject blockade;
+
+    public UnityEvent wolfPackClearedEvents;
+
     private int currentWolfIndex = -1;
     private bool wolfEncounterStarted;
+    private bool wolfPackCleared;
     private Coroutine nextWolfRoutine;
+    private readonly HashSet<WolfFSM> defeatedWolves = new HashSet<WolfFSM>();
 
     private void OnEnable()
     {
@@ -67,6 +79,11 @@ public class BibleTrigger : MonoBehaviour
     private void Start()
     {
         PrepareWolfEncounter();
+
+        if (!activateWolvesSequentially)
+        {
+            SubscribeToWolves();
+        }
     }
 
     private void DisableUI()
@@ -227,7 +244,17 @@ public class BibleTrigger : MonoBehaviour
 
     private void HandleWolfDied(WolfFSM wolf)
     {
-        wolf.Died -= HandleWolfDied;
+        if (wolf != null)
+        {
+            wolf.Died -= HandleWolfDied;
+            defeatedWolves.Add(wolf);
+        }
+
+        if (TryLiftBlockadeIfWolfPackCleared())
+            return;
+
+        if (!activateWolvesSequentially)
+            return;
 
         if (nextWolfRoutine != null)
             StopCoroutine(nextWolfRoutine);
@@ -254,5 +281,51 @@ public class BibleTrigger : MonoBehaviour
             if (wolves[i] != null)
                 wolves[i].Died -= HandleWolfDied;
         }
+    }
+
+    private void SubscribeToWolves()
+    {
+        CacheWolves();
+
+        if (wolves == null)
+            return;
+
+        for (int i = 0; i < wolves.Length; i++)
+        {
+            if (wolves[i] == null)
+                continue;
+
+            wolves[i].Died -= HandleWolfDied;
+            wolves[i].Died += HandleWolfDied;
+        }
+    }
+
+    private bool TryLiftBlockadeIfWolfPackCleared()
+    {
+        if (!liftBlockadeWhenWolfPackCleared || wolfPackCleared)
+            return wolfPackCleared;
+
+        CacheWolves();
+
+        if (wolves == null || wolves.Length == 0)
+            return false;
+
+        for (int i = 0; i < wolves.Length; i++)
+        {
+            if (
+                wolves[i] != null
+                && !wolves[i].IsDead
+                && !defeatedWolves.Contains(wolves[i])
+            )
+                return false;
+        }
+
+        wolfPackCleared = true;
+
+        if (blockade != null)
+            blockade.SetActive(false);
+
+        wolfPackClearedEvents?.Invoke();
+        return true;
     }
 }

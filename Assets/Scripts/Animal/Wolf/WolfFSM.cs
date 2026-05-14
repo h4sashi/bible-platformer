@@ -39,6 +39,7 @@ public class WolfFSM : MonoBehaviour, IDamageable
     private bool isChasing;
     private bool isAttacking;
     private bool isDead;
+    public bool IsDead => isDead;
 
     // --- TIMERS ---
     private float howlCooldownTimer;
