@@ -1,10 +1,8 @@
-using System;
 using Pinwheel.Poseidon;
 using UnityEngine;
 
 public class GlideTrigger : MonoBehaviour
 {
-    private const string DefaultGlideDataId = "default";
     private const float InputDeadZone = 0.01f;
     private const float WaterContactPadding = 0.05f;
     private static readonly Vector3 GlideSeatLocalPosition = new Vector3(0f, 0f, -0.05f);
@@ -36,7 +34,7 @@ public class GlideTrigger : MonoBehaviour
     private float smoothRotation = 10f;
     public float rotGlideAxes = 0;
 
-    [Header("Default Auto Glide")]
+    [Header("Auto Glide")]
     [SerializeField]
     private bool autoMoveDefaultGlide = true;
 
@@ -164,11 +162,7 @@ public class GlideTrigger : MonoBehaviour
             ? mobileHorizontalInput
             : Input.GetAxisRaw("Horizontal");
 
-        if (
-            autoMoveDefaultGlide
-            && IsDefaultGlideData()
-            && Mathf.Abs(horizontalInput) <= InputDeadZone
-        )
+        if (autoMoveDefaultGlide && Mathf.Abs(horizontalInput) <= InputDeadZone)
         {
             horizontalInput = defaultAutoMoveInput >= 0f ? 1f : -1f;
         }
@@ -258,12 +252,6 @@ public class GlideTrigger : MonoBehaviour
         GlideData data = playerScript.GetGlideDataById(glideDataId);
         playerScript.StopGliding(data);
         IsPlayerGliding = false;
-    }
-
-    private bool IsDefaultGlideData()
-    {
-        return string.IsNullOrWhiteSpace(glideDataId)
-            || string.Equals(glideDataId, DefaultGlideDataId, StringComparison.OrdinalIgnoreCase);
     }
 
     private void HandleWaterFloating()
