@@ -112,7 +112,10 @@ public partial class PlayerScript
             data.crossLedge.SetActive(false);
 
         if (data.crossLedgeDefault != null)
+        {
             data.crossLedgeDefault.SetActive(true);
+            PlayLedgeVFX(data);
+        }
 
         if (activeLedgeData == data)
             activeLedgeData = null;
@@ -121,6 +124,41 @@ public partial class PlayerScript
             crossReferrence.SetActive(false);
 
         Debug.Log("Ledge complete — entering no-cross walk mode.");
+    }
+
+    private void PlayLedgeVFX(LedgeZoneData data)
+    {
+        if (data == null || data.LedgeVFX == null)
+            return;
+
+        Transform anchor = data.ledgeVFXAnchorTransform != null ? data.ledgeVFXAnchorTransform : transform;
+        GameObject ledgeVFXInstance = Instantiate(data.LedgeVFX, anchor.position, anchor.rotation);
+        ParticleSystem[] particleSystems = ledgeVFXInstance.GetComponentsInChildren<ParticleSystem>(true);
+
+        float destroyDelay = 0f;
+        foreach (ParticleSystem particleSystem in particleSystems)
+        {
+            ParticleSystem.MainModule main = particleSystem.main;
+            particleSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            particleSystem.Play(true);
+
+            if (!main.loop)
+            {
+                destroyDelay = Mathf.Max(
+                    destroyDelay,
+                    main.startDelay.constantMax + main.duration + main.startLifetime.constantMax
+                );
+            }
+        }
+
+        if (particleSystems.Length == 0)
+        {
+            Debug.LogWarning("LedgeVFX was spawned, but no ParticleSystem was found on it or its children.");
+            return;
+        }
+
+        if (destroyDelay > 0f)
+            Destroy(ledgeVFXInstance, destroyDelay);
     }
 
     /// <summary>

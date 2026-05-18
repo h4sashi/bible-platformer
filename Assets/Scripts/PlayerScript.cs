@@ -1670,6 +1670,8 @@ public class LedgeZoneData
     public Button ledgeBtn;
     public GameObject crossLedge;
     public GameObject crossLedgeDefault;
+    public GameObject LedgeVFX;
+    public Transform ledgeVFXAnchorTransform;
     public GameObject blockade;
     public GameObject descriptiveCanvas;
     public Vector3 crossLedgeFinalPosition;
