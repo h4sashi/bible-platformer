@@ -3,16 +3,15 @@ using System.Numerics;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
 
 public partial class PlayerScript : MonoBehaviour
 {
-
     //when player is sliding down the slope he should maintain
     //descend without any player input and whatnot
-
 
     [Header("Movement Settings")]
     [SerializeField]
@@ -111,14 +110,38 @@ public partial class PlayerScript : MonoBehaviour
     [HideInInspector]
     public int maxHealth = 100;
     public int currentHealth;
+
+    [SerializeField]
+    private Image healthBar;
+
+    [SerializeField]
+    private RectTransform healthBarRect;
     public Image splashDamageImage;
     public float flashDuration = 0.5f;
     public Color flashColor = new Color(1f, 0f, 0f, 0.5f);
+
+    [SerializeField]
+    private float healthRegenerationInterval = 5f;
+
+    [SerializeField]
+    [Range(0f, 1f)]
+    private float healthRegenerationPercent = 0.05f;
+    private float healthBarFullWidth;
+    private Coroutine damageFlashRoutine;
+    private float healthRegenerationTimer;
+    private bool isDead;
 
     [Header("Player Attack Settings")]
     public SphereCollider crossHitCol;
     public LayerMask enemyLayer;
     public float damageAmount = 25f;
+
+    [SerializeField]
+    private float wolfAttackFacingSearchRadius = 15f;
+
+    [SerializeField]
+    private float wolfAttackFacingRotationSpeed = 25f;
+    private Transform currentAttackTarget;
 
     [Header("Mobile Controls")]
     [SerializeField]
@@ -240,14 +263,23 @@ public partial class PlayerScript : MonoBehaviour
 
     private void Awake()
     {
+        // PlayerPrefs.DeleteAll();
+
         glideData.glideRig.weight = 0;
+        maxHealth = Mathf.Max(1, maxHealth);
         currentHealth = maxHealth;
+        isDead = false;
+        healthRegenerationInterval = Mathf.Max(0.01f, healthRegenerationInterval);
+        healthRegenerationTimer = healthRegenerationInterval;
         originalMoveSpeed = moveSpeed;
+        CacheHealthBar();
+        UpdateHealthBar();
         NormalizeSprintSettings();
         sprintDirectionInput = GetFacingMoveDirection();
         sprintTimeRemaining = sprintDuration;
         isSleeping = false;
         rb = GetComponent<Rigidbody>();
+        ApplySavedCheckpointOnSceneLoad();
         CacheSprintButtonVisuals();
         ConfigureSprintButtonEvents();
         UpdateSprintButtonVisual();
@@ -367,6 +399,8 @@ public partial class PlayerScript : MonoBehaviour
         HandleStorm();
         HandleClimbVelocity();
         HandleMountainClimbVelocity();
+        HandleAttackFacing();
+        HandleHealthRegeneration();
 
         if (isGliding == true)
         {
@@ -721,8 +755,8 @@ public partial class PlayerScript : MonoBehaviour
         UnityEngine.Events.UnityAction<BaseEventData> callback
     )
     {
-        EventTrigger.Entry entry = sprintEventTrigger.triggers.Find(
-            triggerEntry => triggerEntry.eventID == eventType
+        EventTrigger.Entry entry = sprintEventTrigger.triggers.Find(triggerEntry =>
+            triggerEntry.eventID == eventType
         );
 
         if (entry == null)
@@ -797,6 +831,10 @@ public partial class PlayerScript : MonoBehaviour
     /// </summary>
     public void AnimationEvent_PlaySlashVFX()
     {
+        Vector3 effectPosition =
+            vfxSpawnPoint != null ? vfxSpawnPoint.position : transform.position;
+        GameAudioStarter.PlaySmashSwing(effectPosition);
+
         if (slashVFX == null)
         {
             Debug.LogWarning("SlashVFX is not assigned!");
@@ -821,6 +859,10 @@ public partial class PlayerScript : MonoBehaviour
     /// </summary>
     public void AnimationEvent_PlayHitVFX()
     {
+        Vector3 effectPosition =
+            vfxSpawnPoint != null ? vfxSpawnPoint.position : transform.position;
+        GameAudioStarter.PlaySmashHit(effectPosition);
+
         if (hitVFX == null)
         {
             Debug.LogWarning("HitVFX is not assigned!");
@@ -990,6 +1032,8 @@ public partial class PlayerScript : MonoBehaviour
 
     void StartCasting()
     {
+        currentAttackTarget = FindNearestLivingWolf();
+        FaceAttackTarget();
         isCasting = true;
         animator.SetBool(IS_CASTING, true);
         isMoving = false;
@@ -998,7 +1042,100 @@ public partial class PlayerScript : MonoBehaviour
     public void StopCasting()
     {
         isCasting = false;
+        currentAttackTarget = null;
         animator.SetBool(IS_CASTING, false);
+    }
+
+    private void HandleAttackFacing()
+    {
+        if (!isCasting)
+            return;
+
+        if (!IsValidAttackTarget(currentAttackTarget))
+            currentAttackTarget = FindNearestLivingWolf();
+
+        FaceAttackTarget();
+    }
+
+    private void FaceAttackTarget()
+    {
+        if (!IsValidAttackTarget(currentAttackTarget))
+            return;
+
+        float zDirection = currentAttackTarget.position.z - transform.position.z;
+        if (Mathf.Abs(zDirection) <= 0.01f)
+            return;
+
+        Quaternion targetRotation =
+            zDirection < 0f
+                ? UnityEngine.Quaternion.Euler(0, 180, 0)
+                : UnityEngine.Quaternion.Euler(0, 0, 0);
+
+        transform.rotation = UnityEngine.Quaternion.Slerp(
+            transform.rotation,
+            targetRotation,
+            wolfAttackFacingRotationSpeed * Time.deltaTime
+        );
+    }
+
+    private Transform FindNearestLivingWolf()
+    {
+        float searchRadius = Mathf.Max(0f, wolfAttackFacingSearchRadius);
+        if (searchRadius <= 0f)
+            return null;
+
+        Collider[] wolfColliders = Physics.OverlapSphere(
+            transform.position,
+            searchRadius,
+            enemyLayer
+        );
+
+        Transform nearestWolf = null;
+        float nearestDistanceSqr = float.MaxValue;
+
+        foreach (Collider wolfCollider in wolfColliders)
+        {
+            WolfFSM wolf = wolfCollider.GetComponentInParent<WolfFSM>();
+            if (wolf == null || wolf.IsDead)
+                continue;
+
+            float distanceSqr = (wolf.transform.position - transform.position).sqrMagnitude;
+            if (distanceSqr >= nearestDistanceSqr)
+                continue;
+
+            nearestDistanceSqr = distanceSqr;
+            nearestWolf = wolf.transform;
+        }
+
+        if (nearestWolf != null)
+            return nearestWolf;
+
+        WolfFSM[] wolves = UnityEngine.Object.FindObjectsByType<WolfFSM>(FindObjectsSortMode.None);
+        float searchRadiusSqr = searchRadius * searchRadius;
+
+        foreach (WolfFSM wolf in wolves)
+        {
+            if (wolf == null || wolf.IsDead)
+                continue;
+
+            float distanceSqr = (wolf.transform.position - transform.position).sqrMagnitude;
+            if (distanceSqr > searchRadiusSqr || distanceSqr >= nearestDistanceSqr)
+                continue;
+
+            nearestDistanceSqr = distanceSqr;
+            nearestWolf = wolf.transform;
+        }
+
+        return nearestWolf;
+    }
+
+    private bool IsValidAttackTarget(Transform target)
+    {
+        if (target == null || !target.gameObject.activeInHierarchy)
+            return false;
+
+        WolfFSM wolf = target.GetComponent<WolfFSM>();
+        return wolf != null && !wolf.IsDead;
     }
 
     // =====================
@@ -1051,6 +1188,7 @@ public partial class PlayerScript : MonoBehaviour
     {
         isMoving = false;
         isCasting = false;
+        currentAttackTarget = null;
         isDrinking = false;
         isPulling = false;
         isSleeping = false;
@@ -1257,6 +1395,7 @@ public partial class PlayerScript : MonoBehaviour
 
         crossCol.enabled = false;
         isCasting = false;
+        currentAttackTarget = null;
         animator.SetBool(IS_CASTING, false);
         crossReferrence.transform.SetParent(handTransform);
         crossReferrence.transform.localPosition = initialTransformCrossOffset;
@@ -1455,6 +1594,55 @@ public partial class PlayerScript : MonoBehaviour
     #endregion
 
     // =====================
+    // CHECKPOINT SAVE SYSTEM
+    // =====================
+
+    #region CHECKPOINT SAVE SYSTEM
+
+    public void SaveCheckpoint(Vector3 respawnPosition, Quaternion respawnRotation)
+    {
+        PlayerCheckpointData checkpoint = new PlayerCheckpointData(
+            SceneManager.GetActiveScene().name,
+            respawnPosition,
+            respawnRotation,
+            Mathf.Clamp(currentHealth, 1, maxHealth)
+        );
+
+        PlayerCheckpointSaveSystem.Save(checkpoint);
+        Debug.Log($"Saved checkpoint at {respawnPosition}");
+    }
+
+    private void ApplySavedCheckpointOnSceneLoad()
+    {
+        if (!TryGetSavedCheckpointInCurrentScene(out PlayerCheckpointData checkpoint))
+            return;
+
+        transform.SetPositionAndRotation(checkpoint.Position, checkpoint.Rotation);
+        currentHealth = Mathf.Clamp(checkpoint.Health, 1, maxHealth);
+        isDead = false;
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        UpdateHealthBar();
+        ResetHealthRegenerationTimer();
+        Debug.Log($"Loaded checkpoint at {checkpoint.Position}");
+    }
+
+    private bool TryGetSavedCheckpointInCurrentScene(out PlayerCheckpointData checkpoint)
+    {
+        if (!PlayerCheckpointSaveSystem.TryLoad(out checkpoint))
+            return false;
+
+        return checkpoint.SceneName == SceneManager.GetActiveScene().name;
+    }
+
+    #endregion
+
+    // =====================
     // DAMAGE SYSTEM
     // =====================
 
@@ -1462,20 +1650,145 @@ public partial class PlayerScript : MonoBehaviour
 
     public void OnDamagedTaken(float damage)
     {
-        currentHealth -= (int)damage;
-        if (currentHealth < 0)
-            currentHealth = 0;
+        if (isDead || damage <= 0f)
+            return;
+
+        SetHealth(currentHealth - Mathf.RoundToInt(damage));
+        ResetHealthRegenerationTimer();
 
         Debug.Log($"Player took {damage} damage. Health: {currentHealth}/{maxHealth}");
 
         if (splashDamageImage != null)
         {
-            StopAllCoroutines();
-            StartCoroutine(DamageFlashEffect());
+            if (damageFlashRoutine != null)
+                StopCoroutine(damageFlashRoutine);
+
+            damageFlashRoutine = StartCoroutine(DamageFlashEffect());
         }
 
         if (currentHealth == 0)
             OnPlayerDeath();
+    }
+
+    public void ReplenishHealthToFull()
+    {
+        SetHealth(maxHealth);
+        isDead = false;
+        ResetHealthRegenerationTimer();
+        Debug.Log($"Player health replenished to {currentHealth}/{maxHealth}");
+    }
+
+    private void HandleHealthRegeneration()
+    {
+        if (isDead || currentHealth >= maxHealth)
+        {
+            ResetHealthRegenerationTimer();
+            return;
+        }
+
+        healthRegenerationTimer -= Time.deltaTime;
+        if (healthRegenerationTimer > 0f)
+            return;
+
+        if (healthRegenerationPercent <= 0f)
+        {
+            ResetHealthRegenerationTimer();
+            return;
+        }
+
+        int regenerationAmount = Mathf.Max(
+            1,
+            Mathf.RoundToInt(maxHealth * healthRegenerationPercent)
+        );
+        SetHealth(currentHealth + regenerationAmount);
+        ResetHealthRegenerationTimer();
+    }
+
+    private void ResetHealthRegenerationTimer()
+    {
+        healthRegenerationInterval = Mathf.Max(0.01f, healthRegenerationInterval);
+        healthRegenerationTimer = healthRegenerationInterval;
+    }
+
+    private void SetHealth(int value)
+    {
+        currentHealth = Mathf.Clamp(value, 0, maxHealth);
+        UpdateHealthBar();
+    }
+
+    private void CacheHealthBar()
+    {
+        if (healthBar == null)
+            healthBar = FindHealthBarByName();
+
+        if (healthBarRect == null && healthBar != null)
+            healthBarRect = healthBar.rectTransform;
+
+        if (healthBarRect != null)
+            healthBarFullWidth = GetHealthBarWidth();
+    }
+
+    private Image FindHealthBarByName()
+    {
+        GameObject healthContainer = GameObject.Find("HealthContainer");
+        if (healthContainer == null)
+            healthContainer = GameObject.Find("healthContainer");
+
+        if (healthContainer == null)
+            return null;
+
+        Transform healthBarTransform = FindChildByName(healthContainer.transform, "healthBar");
+        return healthBarTransform != null ? healthBarTransform.GetComponent<Image>() : null;
+    }
+
+    private Transform FindChildByName(Transform parent, string childName)
+    {
+        foreach (Transform child in parent)
+        {
+            if (child.name.Equals(childName, System.StringComparison.OrdinalIgnoreCase))
+                return child;
+
+            Transform nestedChild = FindChildByName(child, childName);
+            if (nestedChild != null)
+                return nestedChild;
+        }
+
+        return null;
+    }
+
+    private void UpdateHealthBar()
+    {
+        float healthPercent = Mathf.Clamp01((float)currentHealth / maxHealth);
+
+        if (healthBar != null && healthBar.type == Image.Type.Filled)
+        {
+            healthBar.fillAmount = healthPercent;
+            return;
+        }
+
+        if (healthBarRect == null)
+            return;
+
+        if (healthBarFullWidth <= 0f)
+            healthBarFullWidth = GetHealthBarWidth();
+
+        if (healthBarFullWidth > 0f)
+            healthBarRect.SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Horizontal,
+                healthBarFullWidth * healthPercent
+            );
+    }
+
+    private float GetHealthBarWidth()
+    {
+        if (healthBarRect == null)
+            return 0f;
+
+        float width = healthBarRect.rect.width;
+        if (width <= 0f)
+            width = Mathf.Abs(healthBarRect.sizeDelta.x);
+
+        return width;
     }
 
     private IEnumerator DamageFlashEffect()
@@ -1492,11 +1805,22 @@ public partial class PlayerScript : MonoBehaviour
         }
 
         splashDamageImage.color = Color.clear;
+        damageFlashRoutine = null;
     }
 
     void OnPlayerDeath()
     {
+        isDead = true;
         Debug.Log("Player has died.");
+
+        if (TryGetSavedCheckpointInCurrentScene(out _))
+        {
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            return;
+        }
+
+        Debug.LogWarning("No checkpoint found for this scene.");
     }
 
     #endregion
@@ -1509,6 +1833,77 @@ public partial class PlayerScript : MonoBehaviour
 public interface IDamageable
 {
     void TakeDamage(float damage);
+}
+
+[System.Serializable]
+public struct PlayerCheckpointData
+{
+    public string SceneName;
+    public Vector3 Position;
+    public Quaternion Rotation;
+    public int Health;
+
+    public PlayerCheckpointData(string sceneName, Vector3 position, Quaternion rotation, int health)
+    {
+        SceneName = sceneName;
+        Position = position;
+        Rotation = rotation;
+        Health = health;
+    }
+}
+
+public static class PlayerCheckpointSaveSystem
+{
+    private const string HasCheckpointKey = "PLAYER_CHECKPOINT_HAS_SAVE";
+    private const string SceneNameKey = "PLAYER_CHECKPOINT_SCENE";
+    private const string PositionXKey = "PLAYER_CHECKPOINT_POSITION_X";
+    private const string PositionYKey = "PLAYER_CHECKPOINT_POSITION_Y";
+    private const string PositionZKey = "PLAYER_CHECKPOINT_POSITION_Z";
+    private const string RotationXKey = "PLAYER_CHECKPOINT_ROTATION_X";
+    private const string RotationYKey = "PLAYER_CHECKPOINT_ROTATION_Y";
+    private const string RotationZKey = "PLAYER_CHECKPOINT_ROTATION_Z";
+    private const string RotationWKey = "PLAYER_CHECKPOINT_ROTATION_W";
+    private const string HealthKey = "PLAYER_CHECKPOINT_HEALTH";
+
+    public static void Save(PlayerCheckpointData checkpoint)
+    {
+        PlayerPrefs.SetInt(HasCheckpointKey, 1);
+        PlayerPrefs.SetString(SceneNameKey, checkpoint.SceneName);
+        PlayerPrefs.SetFloat(PositionXKey, checkpoint.Position.x);
+        PlayerPrefs.SetFloat(PositionYKey, checkpoint.Position.y);
+        PlayerPrefs.SetFloat(PositionZKey, checkpoint.Position.z);
+        PlayerPrefs.SetFloat(RotationXKey, checkpoint.Rotation.x);
+        PlayerPrefs.SetFloat(RotationYKey, checkpoint.Rotation.y);
+        PlayerPrefs.SetFloat(RotationZKey, checkpoint.Rotation.z);
+        PlayerPrefs.SetFloat(RotationWKey, checkpoint.Rotation.w);
+        PlayerPrefs.SetInt(HealthKey, checkpoint.Health);
+        PlayerPrefs.Save();
+    }
+
+    public static bool TryLoad(out PlayerCheckpointData checkpoint)
+    {
+        checkpoint = new PlayerCheckpointData();
+
+        if (PlayerPrefs.GetInt(HasCheckpointKey, 0) == 0)
+            return false;
+
+        checkpoint = new PlayerCheckpointData(
+            PlayerPrefs.GetString(SceneNameKey, string.Empty),
+            new Vector3(
+                PlayerPrefs.GetFloat(PositionXKey, 0f),
+                PlayerPrefs.GetFloat(PositionYKey, 0f),
+                PlayerPrefs.GetFloat(PositionZKey, 0f)
+            ),
+            new Quaternion(
+                PlayerPrefs.GetFloat(RotationXKey, 0f),
+                PlayerPrefs.GetFloat(RotationYKey, 0f),
+                PlayerPrefs.GetFloat(RotationZKey, 0f),
+                PlayerPrefs.GetFloat(RotationWKey, 1f)
+            ),
+            PlayerPrefs.GetInt(HealthKey, 100)
+        );
+        return true;
+    }
 }
 
 [System.Serializable]

@@ -167,7 +167,15 @@ namespace Pinwheel.Poseidon.FX.Universal
 
             public override void FrameCleanup(CommandBuffer cmd)
             {
+#if UNITY_2022_1_OR_NEWER
+                if (temporaryRenderTexture != null)
+                {
+                    RTHandles.Release(temporaryRenderTexture);
+                    temporaryRenderTexture = null;
+                }
+#else
                 cmd.ReleaseTemporaryRT(temporaryRenderTexture.id);
+#endif
             }
         }
 

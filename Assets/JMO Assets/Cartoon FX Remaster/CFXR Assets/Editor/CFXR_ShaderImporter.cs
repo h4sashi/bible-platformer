@@ -25,6 +25,10 @@ namespace CartoonFX
             {
 #if UNITY_2019_3_OR_NEWER
                 var renderPipeline = GraphicsSettings.currentRenderPipeline;
+                if (renderPipeline == null)
+                {
+                    renderPipeline = GraphicsSettings.defaultRenderPipeline;
+                }
 #else
                 var renderPipeline = GraphicsSettings.renderPipelineAsset;
 #endif
@@ -32,7 +36,7 @@ namespace CartoonFX
             }
         }
 
-        [ScriptedImporter(0, FILE_EXTENSION)]
+        [ScriptedImporter(1, FILE_EXTENSION)]
         public class CFXR_ShaderImporter : ScriptedImporter
         {
             public const string FILE_EXTENSION = "cfxrshader";

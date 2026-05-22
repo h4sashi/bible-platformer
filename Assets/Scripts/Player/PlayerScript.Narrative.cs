@@ -192,6 +192,7 @@ public partial class PlayerScript
         crossReferrence.SetActive(true);
 
         Debug.Log("Drinking fully complete!");
+        OnDrinkingBenefits();
         canvasTrigger.DeactivateCanvas();
         currentWaterAmount = 0;
         canvasTrigger = null;
@@ -202,6 +203,7 @@ public partial class PlayerScript
 
     private void OnDrinkingBenefits()
     {
+        ReplenishHealthToFull();
         Debug.Log("Player received drinking benefits!");
     }
 
@@ -283,6 +285,8 @@ public partial class PlayerScript
 
         if (pluck.eatButton != null)
             pluck.eatButton.gameObject.SetActive(false);
+
+        ReplenishHealthToFull();
     }
 
     #endregion

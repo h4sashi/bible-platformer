@@ -26,6 +26,16 @@ public class BibleTrigger : MonoBehaviour
 
     public float typingSpeed = 0.04f;
 
+    [Header("Verse Audio")]
+    [SerializeField]
+    private AudioClip verseAudioClip;
+
+    [SerializeField]
+    private AudioSource verseAudioSource;
+
+    [SerializeField, Range(0f, 1f)]
+    private float verseAudioVolume = 1f;
+
     private Coroutine typingRoutine;
     private bool hasTriggered;
 
@@ -65,6 +75,10 @@ public class BibleTrigger : MonoBehaviour
     private Coroutine nextWolfRoutine;
     private readonly HashSet<WolfFSM> defeatedWolves = new HashSet<WolfFSM>();
 
+    [Header("Checkpoint")]
+    [SerializeField]
+    private float checkpointRespawnDistance = 3f;
+
     private void OnEnable()
     {
         OnTypingFinishEvent += DisableUI;
@@ -102,6 +116,9 @@ public class BibleTrigger : MonoBehaviour
     {
         if (!other.CompareTag("Player"))
             return;
+
+        SavePlayerCheckpoint(other);
+
         if (hasTriggered)
             return;
 
@@ -121,16 +138,63 @@ public class BibleTrigger : MonoBehaviour
         StartWolfEncounter();
     }
 
+    private void SavePlayerCheckpoint(Collider playerCollider)
+    {
+        PlayerScript playerScript = playerCollider.GetComponentInParent<PlayerScript>();
+        if (playerScript == null)
+            return;
+
+        Vector3 respawnPosition = GetCheckpointRespawnPosition(playerScript.transform);
+        playerScript.SaveCheckpoint(respawnPosition, playerScript.transform.rotation);
+    }
+
+    private Vector3 GetCheckpointRespawnPosition(Transform playerTransform)
+    {
+        float respawnDistance = Mathf.Max(0f, checkpointRespawnDistance);
+        Vector3 directionFromTrigger = playerTransform.position - transform.position;
+        directionFromTrigger.y = 0f;
+
+        if (directionFromTrigger.sqrMagnitude <= 0.001f)
+        {
+            directionFromTrigger = -playerTransform.forward;
+            directionFromTrigger.y = 0f;
+        }
+
+        if (directionFromTrigger.sqrMagnitude <= 0.001f)
+            directionFromTrigger = Vector3.back;
+
+        Vector3 respawnPosition =
+            transform.position + directionFromTrigger.normalized * respawnDistance;
+        respawnPosition.y = playerTransform.position.y;
+        return respawnPosition;
+    }
+
     IEnumerator TypeVerse()
     {
-        bottomContainer.SetActive(true);
-        verseText.text = "";
+        yield return TypeVerseWithAudio();
+    }
 
-        foreach (char c in verse)
+    private IEnumerator TypeVerseWithAudio()
+    {
+        AudioSource audioSource = PlayVerseAudio();
+
+        bottomContainer.SetActive(true);
+        verseText.text = verse;
+        verseText.ForceMeshUpdate();
+        verseText.maxVisibleCharacters = 0;
+
+        int characterCount = verseText.textInfo.characterCount;
+        float audioDuration = GetVerseAudioDuration(audioSource);
+
+        if (characterCount > 0)
         {
-            verseText.text += c;
-            yield return new WaitForSeconds(typingSpeed);
+            if (audioDuration > 0f)
+                yield return RevealVerseOverDuration(characterCount, audioDuration);
+            else
+                yield return RevealVerseAtTypingSpeed(characterCount);
         }
+
+        verseText.maxVisibleCharacters = characterCount;
 
         OnTypingFinishEvent?.Invoke();
         OnTypeFinishEvent?.Invoke();
@@ -145,17 +209,7 @@ public class BibleTrigger : MonoBehaviour
     {
         yield return new WaitForSeconds(6f);
 
-        bottomContainer.SetActive(true);
-        verseText.text = "";
-
-        foreach (char c in verse)
-        {
-            verseText.text += c;
-            yield return new WaitForSeconds(typingSpeed);
-        }
-
-        OnTypingFinishEvent?.Invoke();
-        OnTypeFinishEvent?.Invoke();
+        yield return TypeVerseWithAudio();
     }
 
     public void CallTyping()
@@ -176,6 +230,65 @@ public class BibleTrigger : MonoBehaviour
             StopCoroutine(typingRoutine);
 
         typingRoutine = StartCoroutine(TypeVerseAux());
+    }
+
+    private IEnumerator RevealVerseOverDuration(int characterCount, float duration)
+    {
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(elapsed / duration);
+            verseText.maxVisibleCharacters = Mathf.FloorToInt(progress * characterCount);
+            yield return null;
+        }
+    }
+
+    private IEnumerator RevealVerseAtTypingSpeed(int characterCount)
+    {
+        for (int i = 1; i <= characterCount; i++)
+        {
+            verseText.maxVisibleCharacters = i;
+            yield return new WaitForSeconds(typingSpeed);
+        }
+    }
+
+    private float GetVerseAudioDuration(AudioSource audioSource)
+    {
+        if (audioSource == null || audioSource.clip == null)
+            return 0f;
+
+        float playbackSpeed = Mathf.Abs(audioSource.pitch);
+        if (playbackSpeed <= 0f)
+            return 0f;
+
+        return audioSource.clip.length / playbackSpeed;
+    }
+
+    private AudioSource PlayVerseAudio()
+    {
+        if (verseAudioClip == null)
+            return null;
+
+        AudioSource audioSource = GetVerseAudioSource();
+        audioSource.Stop();
+        audioSource.clip = verseAudioClip;
+        audioSource.volume = verseAudioVolume;
+        audioSource.loop = false;
+        audioSource.Play();
+        return audioSource;
+    }
+
+    private AudioSource GetVerseAudioSource()
+    {
+        if (verseAudioSource != null)
+            return verseAudioSource;
+
+        verseAudioSource = gameObject.AddComponent<AudioSource>();
+        verseAudioSource.playOnAwake = false;
+        verseAudioSource.spatialBlend = 0f;
+        return verseAudioSource;
     }
 
     private void StartWolfEncounter()

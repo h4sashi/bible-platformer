@@ -280,7 +280,7 @@ Shader "Cartoon FX/Remaster/Particle Ubershader"
 				#pragma shader_feature_local _ _ALPHATEST_ON
 				#pragma shader_feature_local _ _ALPHABLEND_ON _ALPHAPREMULTIPLY_ON _ALPHAMODULATE_ON _CFXR_ADDITIVE
 
-				#define CFXR_UPR
+				#define CFXR_URP
 				#define DISABLE_SOFT_PARTICLES
 				#define CFXR_UBERSHADER
 				#include "CFXR_PASSES.cginc"
@@ -325,7 +325,7 @@ Shader "Cartoon FX/Remaster/Particle Ubershader"
 				#pragma target 3.0		//needed for VPOS
 			#endif
 
-				#define CFXR_UPR
+				#define CFXR_URP
 				#define PASS_SHADOW_CASTER
 				#define CFXR_UBERSHADER
 				#include "CFXR_PASSES.cginc"

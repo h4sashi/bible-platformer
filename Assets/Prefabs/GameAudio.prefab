@@ -46,3 +46,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameAudioStarter
   backgroundMusic: {fileID: 8300000, guid: 06f1f7af2dafc4c0e82c57d40114c9d5, type: 3}
   endingSong: {fileID: 8300000, guid: a9cb92e1531b54dc6bcf664c4fe78134, type: 3}
+  backgroundMusicVolume: 1
+  endingSongVolume: 1
+  playThemeOnStart: 1
+  refreshThemeOnSceneLoad: 1
+  loopBackgroundMusic: 1
+  loopEndingSong: 0
+  stopThemeWhenEndingStarts: 1
+  endTriggerSfx: {fileID: 0}
+  endTriggerSfxVolume: 1
+  playEndingSongOnEndTrigger: 1
+  playEndTriggerAudioOnlyOnce: 1
+  smashSwingSfx: {fileID: 0}
+  smashHitSfx: {fileID: 0}
+  smashSwingSfxVolume: 1
+  smashHitSfxVolume: 1

@@ -19,6 +19,7 @@ public class PauseMenu : MonoBehaviour
     [Header("Sound UI")]
     [SerializeField] private TextMeshProUGUI soundText; // or TMP_Text if using TextMeshPro
 
+    public GameObject blurPanel; // Assign in Inspector
     private bool isPaused = false;
     private bool isSoundOn = true;
 
@@ -56,6 +57,7 @@ public class PauseMenu : MonoBehaviour
         isPaused = true;
         pausePanel.SetActive(true);
         mobileHud.SetActive(false);
+        blurPanel.SetActive(true);
         if(wolfPack_1 != null) wolfPack_1.SetActive(false);
         if(wolfPack_2 != null) wolfPack_2.SetActive(false);
         Time.timeScale = 0f;
@@ -65,6 +67,7 @@ public class PauseMenu : MonoBehaviour
     {
         isPaused = false;
         pausePanel.SetActive(false);
+        blurPanel.SetActive(false);
         mobileHud.SetActive(true);
         if(wolfPack_1 != null) wolfPack_1.SetActive(true);
         if(wolfPack_2 != null) wolfPack_2.SetActive(true);

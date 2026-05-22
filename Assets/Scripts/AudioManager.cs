@@ -19,7 +19,6 @@ public class AudioManager : MonoBehaviour
 
     private void Awake()
     {
-        // Singleton
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -29,23 +28,76 @@ public class AudioManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
+        EnsureCoreSources();
         InitPool();
     }
 
-    void InitPool()
+    private void EnsureCoreSources()
     {
-        for (int i = 0; i < poolSize; i++)
+        musicSource = EnsureAudioSource(musicSource, "Music Source");
+        secondaryMusicSource = EnsureAudioSource(secondaryMusicSource, "Secondary Music Source");
+
+        musicSource.playOnAwake = false;
+        musicSource.spatialBlend = 0f;
+        secondaryMusicSource.playOnAwake = false;
+        secondaryMusicSource.spatialBlend = 0f;
+    }
+
+    private AudioSource EnsureAudioSource(AudioSource source, string sourceName)
+    {
+        if (source != null)
+            return source;
+
+        GameObject sourceObject = new GameObject(sourceName);
+        sourceObject.transform.SetParent(transform);
+        sourceObject.transform.localPosition = Vector3.zero;
+        return sourceObject.AddComponent<AudioSource>();
+    }
+
+    private void InitPool()
+    {
+        if (sfxPool.Count > 0)
+            return;
+
+        int sourceCount = Mathf.Max(1, poolSize);
+        poolSize = sourceCount;
+
+        for (int i = 0; i < sourceCount; i++)
         {
-            AudioSource src = Instantiate(sfxPrefab, transform);
+            AudioSource src = CreateSfxSource(i);
             src.playOnAwake = false;
+            src.spatialBlend = 0f;
             sfxPool.Add(src);
         }
     }
 
-    AudioSource GetAvailableSource()
+    private AudioSource CreateSfxSource(int index)
     {
+        AudioSource source;
+
+        if (sfxPrefab != null)
+        {
+            source = Instantiate(sfxPrefab, transform);
+            source.name = $"SFX Source {index + 1}";
+        }
+        else
+        {
+            GameObject sourceObject = new GameObject($"SFX Source {index + 1}");
+            sourceObject.transform.SetParent(transform);
+            sourceObject.transform.localPosition = Vector3.zero;
+            source = sourceObject.AddComponent<AudioSource>();
+        }
+
+        return source;
+    }
+
+    private AudioSource GetAvailableSource()
+    {
+        if (sfxPool.Count == 0)
+            InitPool();
+
         AudioSource src = sfxPool[poolIndex];
-        poolIndex = (poolIndex + 1) % poolSize;
+        poolIndex = (poolIndex + 1) % sfxPool.Count;
         return src;
     }
 
@@ -55,7 +107,19 @@ public class AudioManager : MonoBehaviour
 
     public void PlayMusic(AudioClip clip, float volume = 1f, bool loop = true)
     {
-        if (musicSource.clip == clip) return;
+        if (clip == null || musicSource == null)
+            return;
+
+        if (musicSource.clip == clip)
+        {
+            musicSource.volume = volume;
+            musicSource.loop = loop;
+
+            if (!musicSource.isPlaying)
+                musicSource.Play();
+
+            return;
+        }
 
         musicSource.clip = clip;
         musicSource.volume = volume;
@@ -65,12 +129,14 @@ public class AudioManager : MonoBehaviour
 
     public void StopMusic()
     {
-        musicSource.Stop();
+        if (musicSource != null)
+            musicSource.Stop();
     }
 
     public void SetMusicVolume(float volume)
     {
-        musicSource.volume = volume;
+        if (musicSource != null)
+            musicSource.volume = volume;
     }
 
     // ======================
@@ -79,7 +145,12 @@ public class AudioManager : MonoBehaviour
 
     public void PlaySFX(AudioClip clip, float volume = 1f)
     {
+        if (clip == null)
+            return;
+
         AudioSource src = GetAvailableSource();
+        src.transform.localPosition = Vector3.zero;
+        src.spatialBlend = 0f;
         src.clip = clip;
         src.volume = volume;
         src.loop = false;
@@ -88,9 +159,12 @@ public class AudioManager : MonoBehaviour
 
     public void PlaySFXAtPosition(AudioClip clip, Vector3 position, float volume = 1f)
     {
+        if (clip == null)
+            return;
+
         AudioSource src = GetAvailableSource();
         src.transform.position = position;
-        src.spatialBlend = 1f; // 3D sound
+        src.spatialBlend = 1f;
         src.clip = clip;
         src.volume = volume;
         src.loop = false;
@@ -99,7 +173,14 @@ public class AudioManager : MonoBehaviour
 
     public void PlayLoopingSFX(AudioClip clip, out AudioSource loopSource, float volume = 1f)
     {
+        if (clip == null)
+        {
+            loopSource = null;
+            return;
+        }
+
         loopSource = GetAvailableSource();
+        loopSource.spatialBlend = 0f;
         loopSource.clip = clip;
         loopSource.volume = volume;
         loopSource.loop = true;
@@ -114,21 +195,34 @@ public class AudioManager : MonoBehaviour
 
 
     // ======================
-// 🎵 SECONDARY MUSIC
-// ======================
+    // SECONDARY MUSIC
+    // ======================
 
-public void PlaySecondaryMusic(AudioClip clip, float volume = 1f, bool loop = false)
-{
-    secondaryMusicSource.clip = clip;
-    secondaryMusicSource.volume = volume;
-    secondaryMusicSource.loop = loop;
-    secondaryMusicSource.Play();
-}
+    public void PlaySecondaryMusic(AudioClip clip, float volume = 1f, bool loop = false)
+    {
+        if (clip == null || secondaryMusicSource == null)
+            return;
 
-public void StopSecondaryMusic()
-{
-    secondaryMusicSource.Stop();
-}
+        if (secondaryMusicSource.clip == clip)
+        {
+            secondaryMusicSource.volume = volume;
+            secondaryMusicSource.loop = loop;
 
+            if (!secondaryMusicSource.isPlaying)
+                secondaryMusicSource.Play();
 
+            return;
+        }
+
+        secondaryMusicSource.clip = clip;
+        secondaryMusicSource.volume = volume;
+        secondaryMusicSource.loop = loop;
+        secondaryMusicSource.Play();
+    }
+
+    public void StopSecondaryMusic()
+    {
+        if (secondaryMusicSource != null)
+            secondaryMusicSource.Stop();
+    }
 }
